@@ -102,7 +102,7 @@ export default async function DashboardPage() {
                     <td className="px-6 py-3 text-slate-700 dark:text-slate-300">{new Date(t.date).toLocaleDateString()}</td>
                     <td className="px-6 py-3 text-slate-700 dark:text-slate-300">{t.fromPlace}</td>
                     <td className="px-6 py-3 text-slate-700 dark:text-slate-300">{t.toPlace}</td>
-                    <td className="px-6 py-3 text-slate-700 dark:text-slate-300">{t.containerSize.replace("SIZE_", "")}ft</td>
+                    <td className="px-6 py-3 text-slate-700 dark:text-slate-300">{t.containerSize.replace("SIZE_", "")} ft</td>
                     <td className="px-6 py-3 text-slate-700 dark:text-slate-300">{t.driver.name}</td>
                   </tr>
                 ))}

@@ -51,7 +51,9 @@ export default function TransportsPage() {
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
     if (status === "authenticated") fetchTransports();
-  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+    // fetchTransports is intentionally not in deps to avoid re-fetching on re-renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, router]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this transport?")) return;

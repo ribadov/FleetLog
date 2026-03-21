@@ -36,17 +36,19 @@ export default function NewTransportPage() {
   }, [status, router]);
 
   useEffect(() => {
-    if (status === "authenticated") {
+    if (status === "authenticated" && session) {
       fetch("/api/users")
         .then((r) => r.json())
-        .then((data) => {
+        .then((data: User[]) => {
           setUsers(data);
           if (role === "DRIVER") {
             setForm((prev) => ({ ...prev, driverId: session.user.id }));
           }
         });
     }
-  }, [status, role, session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Run only once when session is established
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   const drivers = users.filter((u) => u.role === "DRIVER");
   const contractors = users.filter((u) => u.role === "CONTRACTOR" || u.role === "MANAGER");

@@ -29,6 +29,12 @@ interface ProfileData {
   bic: string | null
 }
 
+type PartnerManager = {
+  id: string
+  name: string
+  workspaceId: string | null
+}
+
 export default function ProfilePage() {
   const router = useRouter()
   const { status } = useSession()
@@ -40,6 +46,12 @@ export default function ProfilePage() {
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [deletePassword, setDeletePassword] = useState("")
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [partnerManagers, setPartnerManagers] = useState<PartnerManager[]>([])
+  const [selectedPartnerManagerIds, setSelectedPartnerManagerIds] = useState<string[]>([])
+  const [partnerWorkspaceCode, setPartnerWorkspaceCode] = useState("")
+  const [partnerAddLoading, setPartnerAddLoading] = useState(false)
+  const [partnerMessage, setPartnerMessage] = useState("")
+  const [partnerMessageType, setPartnerMessageType] = useState<"success" | "error" | null>(null)
   const [form, setForm] = useState<ProfileData | null>(null)
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -47,6 +59,22 @@ export default function ProfilePage() {
     confirmPassword: "",
   })
   const t = useMemo(() => getTranslator(locale), [locale])
+
+  const loadContractorPartners = async () => {
+    const partnerResponse = await fetch("/api/contractor-partners")
+    if (!partnerResponse.ok) {
+      const payload = await partnerResponse.json().catch(() => ({ error: "Failed to load subcontractors" }))
+      throw new Error(payload.error || "Failed to load subcontractors")
+    }
+
+    const partnerData = await partnerResponse.json() as {
+      managers: PartnerManager[]
+      selectedManagerIds: string[]
+    }
+
+    setPartnerManagers(partnerData.managers)
+    setSelectedPartnerManagerIds(partnerData.selectedManagerIds)
+  }
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -68,6 +96,17 @@ export default function ProfilePage() {
           }
           const data = await res.json() as ProfileData
           setForm(data)
+
+          if (data.role === "CONTRACTOR") {
+            await loadContractorPartners()
+          } else if (data.role === "MANAGER") {
+            const partnerResponse = await fetch("/api/contractor-partners")
+            if (partnerResponse.ok) {
+              const payload = await partnerResponse.json() as { contractors?: PartnerManager[] }
+              setPartnerManagers(payload.contractors ?? [])
+            }
+          }
+
           setError("")
         } catch (err) {
           setError(err instanceof Error ? err.message : "Failed to load profile")
@@ -150,7 +189,34 @@ export default function ProfilePage() {
       if (!res.ok) {
         setError(data.error || "Failed to update profile")
       } else {
+        setForm(data)
+        let partnerSaveError = ""
+
+        if (form.role === "CONTRACTOR") {
+          const partnerRes = await fetch("/api/contractor-partners", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ managerIds: selectedPartnerManagerIds }),
+          })
+
+          if (!partnerRes.ok) {
+            const partnerData = await partnerRes.json()
+            partnerSaveError = partnerData.error || "Failed to update subcontractors"
+          } else {
+            await loadContractorPartners()
+          }
+        } else if (form.role === "MANAGER") {
+          const partnerResponse = await fetch("/api/contractor-partners")
+          if (partnerResponse.ok) {
+            const payload = await partnerResponse.json() as { contractors?: PartnerManager[] }
+            setPartnerManagers(payload.contractors ?? [])
+          }
+        }
+
         setSuccess(t("profileUpdated") || "Profile updated successfully")
+        if (partnerSaveError) {
+          setError(partnerSaveError)
+        }
         setShowPasswordChange(false)
         setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
         setTimeout(() => {
@@ -199,6 +265,55 @@ export default function ProfilePage() {
       setError(err instanceof Error ? err.message : (t("accountDeleteError") || "Error deleting account"))
     } finally {
       setDeleteLoading(false)
+    }
+  }
+
+  const togglePartnerManager = (managerId: string) => {
+    setSelectedPartnerManagerIds((previous) =>
+      previous.includes(managerId)
+        ? previous.filter((entry) => entry !== managerId)
+        : [...previous, managerId]
+    )
+  }
+
+  const handleAddPartnerByCode = async () => {
+    const normalizedCode = partnerWorkspaceCode.trim().toUpperCase()
+    if (!normalizedCode) {
+      setPartnerMessage(t("workspaceCode") || "Workspace code")
+      setPartnerMessageType("error")
+      return
+    }
+
+    setError("")
+    setSuccess("")
+    setPartnerMessage("")
+    setPartnerMessageType(null)
+    setPartnerAddLoading(true)
+
+    try {
+      const response = await fetch("/api/contractor-partners", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceCode: normalizedCode }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok) {
+        setPartnerMessage(payload.error || (t("invalidSubcontractorCode") || "Ungültiger Auftragnehmer-Code"))
+        setPartnerMessageType("error")
+        return
+      }
+
+      setSuccess(t("subcontractorAdded") || "Auftragnehmer hinzugefügt")
+      setPartnerMessage(t("subcontractorAdded") || "Auftragnehmer hinzugefügt")
+      setPartnerMessageType("success")
+      setPartnerWorkspaceCode("")
+      await loadContractorPartners()
+    } catch (requestError) {
+      setPartnerMessage(requestError instanceof Error ? requestError.message : (t("invalidSubcontractorCode") || "Ungültiger Auftragnehmer-Code"))
+      setPartnerMessageType("error")
+    } finally {
+      setPartnerAddLoading(false)
     }
   }
 
@@ -449,6 +564,84 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {form.role === "CONTRACTOR" && (
+              <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                  {t("subcontractors") || "Auftragnehmer"}
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                  {t("selectSubcontractorsHint") || "Wähle die Auftragnehmer, die dir zur Transport-Erstellung zur Verfügung stehen."}
+                </p>
+
+                <div className="mb-4 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    {t("askSubcontractorForCode") || "Bitte den Auftragnehmer um seinen Workspace-Code oder Einladungslink bitten."}
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      value={partnerWorkspaceCode}
+                      onChange={(event) => setPartnerWorkspaceCode(event.target.value)}
+                      placeholder="WS-XXXXXX"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddPartnerByCode}
+                      disabled={partnerAddLoading}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium"
+                    >
+                      {partnerAddLoading ? t("saving") : (t("addSubcontractor") || "Auftragnehmer hinzufügen")}
+                    </button>
+                  </div>
+                  {partnerMessage && (
+                    <p className={`mt-2 text-xs ${partnerMessageType === "error" ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      {partnerMessage}
+                    </p>
+                  )}
+                </div>
+
+                {partnerManagers.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">{t("none")}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {partnerManagers.map((manager) => (
+                      <label key={manager.id} className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={selectedPartnerManagerIds.includes(manager.id)}
+                          onChange={() => togglePartnerManager(manager.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span>{manager.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {form.role === "MANAGER" && (
+              <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                  {t("clients") || "Auftraggeber"}
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
+                  {t("clientsAssignedHint") || "Diese Auftraggeber haben dich als Auftragnehmer hinzugefügt."}
+                </p>
+                {partnerManagers.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">{t("none")}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {partnerManagers.map((client) => (
+                      <div key={client.id} className="text-sm text-slate-700 dark:text-slate-300">
+                        {client.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

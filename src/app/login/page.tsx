@@ -9,7 +9,7 @@ import { getTranslator, readClientLocale, type Locale } from "@/lib/i18n";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [locale] = useState<Locale>(() => readClientLocale());
+  const [locale, setLocale] = useState<Locale>(() => readClientLocale());
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -45,7 +45,7 @@ export default function LoginPage() {
             <h1 className="text-3xl font-bold text-blue-700 dark:text-blue-400">FleetLog</h1>
             <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm">{t("loginSubtitle")}</p>
             <div className="mt-3 flex justify-center">
-              <LanguageSelector currentLocale={locale} label={t("language")} />
+              <LanguageSelector currentLocale={locale} label={t("language")} onLocaleChange={setLocale} />
             </div>
           </div>
 
@@ -58,7 +58,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Email
+                {t("email")}
               </label>
               <input
                 id="email"
@@ -72,7 +72,7 @@ export default function LoginPage() {
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Password
+                {t("password")}
               </label>
               <input
                 id="password"
@@ -94,7 +94,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-lg transition-colors"
             >
-              {loading ? "Signing in…" : "Sign In"}
+              {loading ? t("loading") : t("signIn")}
             </button>
           </form>
 

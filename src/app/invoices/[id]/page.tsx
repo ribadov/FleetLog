@@ -60,12 +60,14 @@ export default async function InvoiceDetailPage({ params }: Params) {
     notFound();
   }
 
-  if (!isAdmin && invoice.workspaceId !== workspaceId) {
-    redirect("/invoices");
-  }
-
-  if (session.user.role === "CONTRACTOR" && invoice.contractorId !== session.user.id) {
-    redirect("/invoices");
+  if (!isAdmin) {
+    if (session.user.role === "CONTRACTOR") {
+      if (invoice.contractorId !== session.user.id) {
+        redirect("/invoices");
+      }
+    } else if (invoice.workspaceId !== workspaceId) {
+      redirect("/invoices");
+    }
   }
 
   if (session.user.role === "CONTRACTOR" && !invoice.sentAt) {
@@ -188,6 +190,7 @@ export default async function InvoiceDetailPage({ params }: Params) {
             <thead>
               <tr className="text-left text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
                 <th className="px-4 py-3 font-medium">Date</th>
+                <th className="px-4 py-3 font-medium">Containernr.</th>
                 <th className="px-4 py-3 font-medium">Auftragsnr.</th>
                 <th className="px-4 py-3 font-medium">Container</th>
                 <th className="px-4 py-3 font-medium">Von</th>
@@ -209,6 +212,9 @@ export default async function InvoiceDetailPage({ params }: Params) {
                   </td>
                   <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
                     {transport.orderNumber ?? "—"}
+                  </td>
+                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+                    {transport.jobNumber ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
                     {containerLabel(transport.containerSize)}

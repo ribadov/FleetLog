@@ -27,8 +27,14 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Transport not found" }, { status: 404 });
   }
 
-  if (!isAdmin && transport.workspaceId !== workspaceId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!isAdmin) {
+    if (session.user.role === "CONTRACTOR") {
+      if (transport.contractorId !== session.user.id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } else if (transport.workspaceId !== workspaceId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const canUpload =

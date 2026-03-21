@@ -17,10 +17,14 @@ export default async function TransportsPage() {
   const t = getTranslator(locale);
   const { isAdmin, workspaceId } = getTenantContext(session.user);
 
-  const where = {
-    ...(isAdmin ? {} : { workspaceId: workspaceId ?? undefined }),
-    ...(role === "DRIVER" ? { driverId: userId } : {}),
-  };
+  const where = isAdmin
+    ? {}
+    : role === "CONTRACTOR"
+      ? { contractorId: userId }
+      : {
+          ...(workspaceId ? { workspaceId } : {}),
+          ...(role === "DRIVER" ? { driverId: userId } : {}),
+        };
 
   const transports = await prisma.transport.findMany({
     where,

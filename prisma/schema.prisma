@@ -57,6 +57,8 @@ model User {
   invoicesAsContractor   Invoice[]   @relation("InvoiceContractor")
   invoicesSent           Invoice[]   @relation("InvoiceSender")
   managedWorkspaces      Workspace[] @relation("WorkspaceManager")
+  contractorPartners     ContractorPartnerAssignment[] @relation("ContractorPartners")
+  managerClients         ContractorPartnerAssignment[] @relation("ManagerClients")
   passwordResetTokens    PasswordResetToken[]
 }
 
@@ -114,6 +116,7 @@ model Transport {
   id              String        @id @default(cuid())
   date            DateTime
   orderNumber     String?
+  jobNumber       String?
   fromPlace       String
   toPlace         String
   containerSize   ContainerSize
@@ -121,6 +124,10 @@ model Transport {
   waitingFrom     String?
   waitingTo       String?
   freightLetterPath String?
+  basePrice       Float         @default(0)
+  waitingMinutes  Int           @default(0)
+  waitingSurcharge Float        @default(0)
+  imoSurcharge    Float         @default(0)
   price           Float
   notes           String?
   createdAt       DateTime      @default(now())
@@ -139,6 +146,41 @@ model Transport {
 
   invoiceId       String?
   invoice         Invoice?      @relation(fields: [invoiceId], references: [id])
+  legs            TransportLeg[]
+}
+
+model ContractorPartnerAssignment {
+  id           String   @id @default(cuid())
+  contractorId String
+  managerId    String
+  createdAt    DateTime @default(now())
+
+  contractor   User     @relation("ContractorPartners", fields: [contractorId], references: [id], onDelete: Cascade)
+  manager      User     @relation("ManagerClients", fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@unique([contractorId, managerId])
+  @@index([contractorId])
+  @@index([managerId])
+}
+
+model TransportLeg {
+  id               String     @id @default(cuid())
+  sequence         Int
+  fromPlace        String
+  toPlace          String
+  waitingFrom      String?
+  waitingTo        String?
+  basePrice        Float      @default(0)
+  waitingMinutes   Int        @default(0)
+  waitingSurcharge Float      @default(0)
+  totalPrice       Float      @default(0)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  transportId      String
+  transport        Transport  @relation(fields: [transportId], references: [id], onDelete: Cascade)
+
+  @@index([transportId, sequence])
 }
 
 model Place {

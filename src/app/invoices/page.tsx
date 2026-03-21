@@ -20,13 +20,13 @@ export default async function InvoicesPage() {
 
   const { isAdmin, workspaceId } = getTenantContext(session.user);
 
-  if (!isAdmin && !workspaceId) {
+  if (!isAdmin && session.user.role !== "CONTRACTOR" && !workspaceId) {
     redirect("/dashboard");
   }
 
   const where =
     session.user.role === "CONTRACTOR"
-      ? { contractorId: session.user.id, sentAt: { not: null }, workspaceId }
+      ? { contractorId: session.user.id, sentAt: { not: null } }
       : isAdmin
         ? {}
         : { workspaceId };
@@ -72,22 +72,22 @@ export default async function InvoicesPage() {
       {session.user.role === "MANAGER" && (
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden mb-8">
           <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Open Containers by Contractor</h2>
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t("openContainersByContractor")}</h2>
           </div>
           {openByContractor.length === 0 ? (
             <div className="px-6 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">
-              No open containers waiting for invoice.
+              {t("noOpenContainersWaitingForInvoice")}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
-                    <th className="px-4 py-3 font-medium">Contractor</th>
-                    <th className="px-4 py-3 font-medium">Email</th>
-                    <th className="px-4 py-3 font-medium">Open Containers</th>
-                    <th className="px-4 py-3 font-medium">Open Total</th>
-                    <th className="px-4 py-3 font-medium">Action</th>
+                    <th className="px-4 py-3 font-medium">{t("contractor")}</th>
+                    <th className="px-4 py-3 font-medium">{t("email")}</th>
+                    <th className="px-4 py-3 font-medium">{t("transports")}</th>
+                    <th className="px-4 py-3 font-medium">{t("openTotal")}</th>
+                    <th className="px-4 py-3 font-medium">{t("action")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -121,20 +121,20 @@ export default async function InvoicesPage() {
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden">
         {invoices.length === 0 ? (
           <div className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-            No invoices yet.
+            {t("noInvoicesYet")}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
-                  <th className="px-4 py-3 font-medium">Invoice #</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Contractor</th>
-                  <th className="px-4 py-3 font-medium">Items</th>
-                  <th className="px-4 py-3 font-medium">Total</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Action</th>
+                  <th className="px-4 py-3 font-medium">{t("invoiceNumber")}</th>
+                  <th className="px-4 py-3 font-medium">{t("date")}</th>
+                  <th className="px-4 py-3 font-medium">{t("contractor")}</th>
+                  <th className="px-4 py-3 font-medium">{t("items")}</th>
+                  <th className="px-4 py-3 font-medium">{t("price")}</th>
+                  <th className="px-4 py-3 font-medium">{t("status")}</th>
+                  <th className="px-4 py-3 font-medium">{t("action")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -153,11 +153,11 @@ export default async function InvoicesPage() {
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
                       {invoice.sentAt ? (
                         <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded">
-                          Sent
+                          {t("sent")}
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded">
-                          Draft
+                          {t("draft")}
                         </span>
                       )}
                     </td>
@@ -166,7 +166,7 @@ export default async function InvoicesPage() {
                         href={`/invoices/${invoice.id}`}
                         className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-300 dark:border-blue-700 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                       >
-                        Open
+                        {t("open")}
                       </Link>
                     </td>
                   </tr>

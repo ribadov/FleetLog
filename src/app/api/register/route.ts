@@ -73,9 +73,9 @@ export async function POST(req: Request) {
       )
     }
 
-    if ((role === "DRIVER" || role === "CONTRACTOR") && (!workspaceCode || String(workspaceCode).trim() === "")) {
+    if (role === "DRIVER" && (!workspaceCode || String(workspaceCode).trim() === "")) {
       return NextResponse.json(
-        { error: "Workspace code is required for DRIVER and CONTRACTOR" },
+        { error: "Workspace code is required for DRIVER" },
         { status: 400 }
       )
     }
@@ -187,13 +187,18 @@ export async function POST(req: Request) {
       )
     }
 
-    const normalizedWorkspaceCode = normalizeCode(String(workspaceCode))
-    const workspace = await prisma.workspace.findUnique({ where: { code: normalizedWorkspaceCode } })
-    if (!workspace) {
-      return NextResponse.json(
-        { error: "Invalid workspace code" },
-        { status: 400 }
-      )
+    let workspaceId: string | null = null
+    if (role === "DRIVER") {
+      const normalizedWorkspaceCode = normalizeCode(String(workspaceCode))
+      const workspace = await prisma.workspace.findUnique({ where: { code: normalizedWorkspaceCode } })
+      if (!workspace) {
+        return NextResponse.json(
+          { error: "Invalid workspace code" },
+          { status: 400 }
+        )
+      }
+
+      workspaceId = workspace.id
     }
 
     await prisma.user.create({
@@ -217,7 +222,7 @@ export async function POST(req: Request) {
         bankAccountHolder: null,
         iban: null,
         bic: null,
-        workspaceId: workspace.id,
+        workspaceId,
       },
     })
 

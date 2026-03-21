@@ -20,7 +20,7 @@ export default function ForgotPasswordPage() {
     setMessage("")
 
     if (!email.trim()) {
-      setError(t("email") || "Email is required")
+      setError(t("emailRequired"))
       return
     }
 
@@ -36,14 +36,14 @@ export default function ForgotPasswordPage() {
       const data = await res.json()
 
       if (res.ok) {
-        setMessage(t("passwordResetEmailSent") || "Email sent successfully")
+        setMessage(t("passwordResetEmailSent"))
         setEmailSent(true)
         setEmail("")
       } else {
-        setError(data.error || (t("passwordResetEmailError") || "Error sending email"))
+        setError(data.error || t("passwordResetEmailError"))
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : (t("passwordResetEmailError") || "Error sending email"))
+      setError(err instanceof Error ? err.message : t("passwordResetEmailError"))
     } finally {
       setLoading(false)
     }
@@ -54,10 +54,10 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 text-center">
-            {t("resetPassword") || "Reset Password"}
+            {t("resetPassword")}
           </h1>
           <p className="text-slate-600 dark:text-slate-400 text-center mb-8">
-            {t("resetPasswordSubtitle") || "Enter your email to receive a reset link"}
+            {t("resetPasswordSubtitle")}
           </p>
 
           {!emailSent ? (
@@ -70,7 +70,7 @@ export default function ForgotPasswordPage() {
 
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  {t("email") || "Email"}
+                  {t("email")}
                 </label>
                 <input
                   id="email"
@@ -88,7 +88,7 @@ export default function ForgotPasswordPage() {
                 disabled={loading}
                 className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium transition disabled:cursor-not-allowed"
               >
-                {loading ? t("sending") || "Sending..." : t("resetPasswordButton") || "Send Reset Link"}
+                {loading ? t("sending") : t("resetPasswordButton")}
               </button>
             </form>
           ) : (
@@ -99,20 +99,20 @@ export default function ForgotPasswordPage() {
                 </p>
               </div>
               <p className="text-slate-600 dark:text-slate-400 text-sm text-center">
-                Check your email inbox for the reset link
+                {t("checkInboxForResetLink")}
               </p>
             </div>
           )}
 
           <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
             <p className="text-center text-slate-600 dark:text-slate-400 text-sm mb-3">
-              {t("alreadyHaveAccount") || "Already have an account?"}
+              {t("alreadyHaveAccount")}
             </p>
             <Link
               href="/login"
               className="block text-center px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600 font-medium transition"
             >
-              {t("signIn") || "Sign In"}
+              {t("signIn")}
             </Link>
           </div>
         </div>

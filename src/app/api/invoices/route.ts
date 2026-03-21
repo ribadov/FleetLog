@@ -32,13 +32,13 @@ export async function GET() {
     }
   }
 
-  if (!isAdmin && !workspaceId) {
+  if (!isAdmin && session.user.role !== "CONTRACTOR" && !workspaceId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const where =
     session.user.role === "CONTRACTOR"
-      ? { contractorId: session.user.id, sentAt: { not: null }, workspaceId }
+      ? { contractorId: session.user.id, sentAt: { not: null } }
       : isAdmin
         ? {}
         : { workspaceId };
@@ -86,8 +86,7 @@ export async function POST(req: Request) {
 
   if (
     !contractor ||
-    contractor.role !== "CONTRACTOR" ||
-    (!isAdmin && contractor.workspaceId !== workspaceId)
+    contractor.role !== "CONTRACTOR"
   ) {
     return NextResponse.json(
       { error: "Contractor not found" },
@@ -104,6 +103,7 @@ export async function POST(req: Request) {
     select: {
       id: true,
       price: true,
+      workspaceId: true,
     },
   });
 
@@ -117,13 +117,26 @@ export async function POST(req: Request) {
   const totalAmount = openTransports.reduce((sum, transport) => sum + transport.price, 0);
   const itemsCount = openTransports.length;
   const invoiceNumber = buildInvoiceNumber();
+  const uniqueWorkspaceIds = Array.from(new Set(openTransports.map((transport) => transport.workspaceId).filter(Boolean)));
+  const invoiceWorkspaceId = isAdmin
+    ? uniqueWorkspaceIds.length === 1
+      ? uniqueWorkspaceIds[0]!
+      : null
+    : workspaceId;
+
+  if (!invoiceWorkspaceId) {
+    return NextResponse.json(
+      { error: "Open transports must belong to one workspace" },
+      { status: 400 }
+    );
+  }
 
   const invoice = await prisma.$transaction(async (tx) => {
     const createdInvoice = await tx.invoice.create({
       data: {
         invoiceNumber,
         contractorId,
-        workspaceId: contractor.workspaceId,
+        workspaceId: invoiceWorkspaceId,
         recipientEmail: contractor.billingEmail ?? contractor.email,
         totalAmount,
         itemsCount,

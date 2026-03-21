@@ -21,7 +21,7 @@ export default async function DashboardPage() {
   let totalUsers = 0;
   let workspaceCode: string | null = null;
 
-  if (!isAdmin && !workspaceId) {
+  if (!isAdmin && user.role !== "CONTRACTOR" && !workspaceId) {
     redirect("/login");
   }
 
@@ -49,7 +49,7 @@ export default async function DashboardPage() {
     });
     totalRevenue = result._sum.price ?? 0;
   } else {
-    totalTransports = await prisma.transport.count({ where: { workspaceId } });
+    totalTransports = await prisma.transport.count({ where: { contractorId: user.id } });
   }
 
   const recentTransports = await prisma.transport.findMany({
@@ -58,7 +58,9 @@ export default async function DashboardPage() {
         ? {}
         : user.role === "DRIVER"
           ? { driverId: user.id, workspaceId }
-          : { workspaceId },
+          : user.role === "CONTRACTOR"
+            ? { contractorId: user.id }
+            : { workspaceId },
     include: { driver: true },
     orderBy: { date: "desc" },
     take: 5,

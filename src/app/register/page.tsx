@@ -8,7 +8,7 @@ import { getTranslator, readClientLocale, type Locale } from "@/lib/i18n";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [locale] = useState<Locale>(() => readClientLocale());
+  const [locale, setLocale] = useState<Locale>(() => readClientLocale());
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -58,7 +58,7 @@ export default function RegisterPage() {
     setLoading(false);
 
     if (!res.ok) {
-      setError(data.error || "Registration failed");
+      setError(data.error || t("registrationFailed"));
     } else {
       if (form.role === "MANAGER") {
         setSuccess(t("managerCreated"));
@@ -80,7 +80,7 @@ export default function RegisterPage() {
             <h1 className="text-3xl font-bold text-blue-700 dark:text-blue-400">FleetLog</h1>
             <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm">{t("registerSubtitle")}</p>
             <div className="mt-3 flex justify-center">
-              <LanguageSelector currentLocale={locale} label={t("language")} />
+              <LanguageSelector currentLocale={locale} label={t("language")} onLocaleChange={setLocale} />
             </div>
           </div>
 
@@ -99,7 +99,7 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Full Name
+                {t("fullName")}
               </label>
               <input
                 id="name"
@@ -114,7 +114,7 @@ export default function RegisterPage() {
             </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Email
+                {t("email")}
               </label>
               <input
                 id="email"
@@ -129,7 +129,7 @@ export default function RegisterPage() {
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Password
+                {t("password")}
               </label>
               <input
                 id="password"
@@ -193,10 +193,10 @@ export default function RegisterPage() {
               </select>
             </div>
 
-            {(form.role === "DRIVER" || form.role === "CONTRACTOR") && (
+            {form.role === "DRIVER" && (
               <div>
                 <label htmlFor="workspaceCode" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Workspace Code
+                  {t("workspaceCode")}
                 </label>
                 <input
                   id="workspaceCode"
@@ -215,7 +215,7 @@ export default function RegisterPage() {
               <>
                 <div>
                   <label htmlFor="companyName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Company Name
+                    {t("companyName")}
                   </label>
                   <input
                     id="companyName"
@@ -231,7 +231,7 @@ export default function RegisterPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="companyStreet" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      Street
+                      {t("street")}
                     </label>
                     <input
                       id="companyStreet"
@@ -245,7 +245,7 @@ export default function RegisterPage() {
                   </div>
                   <div>
                     <label htmlFor="companyHouseNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      House Number
+                      {t("houseNumber")}
                     </label>
                     <input
                       id="companyHouseNumber"
@@ -262,7 +262,7 @@ export default function RegisterPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="companyPostalCode" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      Postal Code
+                      {t("postalCode")}
                     </label>
                     <input
                       id="companyPostalCode"
@@ -276,7 +276,7 @@ export default function RegisterPage() {
                   </div>
                   <div>
                     <label htmlFor="companyCity" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      City
+                      {t("city")}
                     </label>
                     <input
                       id="companyCity"
@@ -292,7 +292,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="companyCountry" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Country
+                    {t("country")}
                   </label>
                   <input
                     id="companyCountry"
@@ -307,7 +307,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="billingEmail" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Rechnungs-E-Mail (optional)
+                    {t("billingEmail")}
                   </label>
                   <input
                     id="billingEmail"
@@ -322,7 +322,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="vatId" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Umsatzsteuer-Identifikationsnummer
+                    {t("vatId")}
                   </label>
                   <input
                     id="vatId"
@@ -337,7 +337,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="taxNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Steuernummer
+                    {t("taxNumber")}
                   </label>
                   <input
                     id="taxNumber"
@@ -356,7 +356,7 @@ export default function RegisterPage() {
               <>
                 <div>
                   <label htmlFor="companyName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Firmenname
+                    {t("companyName")}
                   </label>
                   <input
                     id="companyName"
@@ -372,7 +372,7 @@ export default function RegisterPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="companyStreet" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      Straße
+                      {t("street")}
                     </label>
                     <input
                       id="companyStreet"
@@ -386,7 +386,7 @@ export default function RegisterPage() {
                   </div>
                   <div>
                     <label htmlFor="companyHouseNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      Hausnummer
+                      {t("houseNumber")}
                     </label>
                     <input
                       id="companyHouseNumber"
@@ -403,7 +403,7 @@ export default function RegisterPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="companyPostalCode" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      PLZ
+                      {t("postalCode")}
                     </label>
                     <input
                       id="companyPostalCode"
@@ -417,7 +417,7 @@ export default function RegisterPage() {
                   </div>
                   <div>
                     <label htmlFor="companyCity" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      Ort
+                      {t("city")}
                     </label>
                     <input
                       id="companyCity"
@@ -433,7 +433,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="companyCountry" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Land
+                    {t("country")}
                   </label>
                   <input
                     id="companyCountry"
@@ -448,7 +448,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="vatId" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Umsatzsteuer-Identifikationsnummer
+                    {t("vatId")}
                   </label>
                   <input
                     id="vatId"
@@ -463,7 +463,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="taxNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Steuernummer
+                    {t("taxNumber")}
                   </label>
                   <input
                     id="taxNumber"
@@ -478,7 +478,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="bankName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Bankname
+                    {t("bankName")}
                   </label>
                   <input
                     id="bankName"
@@ -493,7 +493,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="bankAccountHolder" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Zahlungsempfänger
+                    {t("accountHolder")}
                   </label>
                   <input
                     id="bankAccountHolder"
@@ -542,7 +542,7 @@ export default function RegisterPage() {
               disabled={loading}
               className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-lg transition-colors"
             >
-              {loading ? "Creating account…" : "Create Account"}
+              {loading ? t("creating") : t("createAccount")}
             </button>
           </form>
 

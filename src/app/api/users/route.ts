@@ -12,12 +12,21 @@ export async function GET() {
   const role = session.user.role
   const { isAdmin, workspaceId } = getTenantContext(session.user)
 
-  if (!isAdmin && !workspaceId) {
+  if (!isAdmin && role !== "CONTRACTOR" && !workspaceId) {
     return NextResponse.json({ error: "Workspace missing" }, { status: 403 })
   }
 
-  let where: Record<string, unknown> = isAdmin ? {} : { workspaceId }
-  if (role === "DRIVER" || role === "CONTRACTOR") {
+  let where: Record<string, unknown>
+
+  if (isAdmin) {
+    where = {}
+  } else if (role === "CONTRACTOR") {
+    where = { role: { in: ["DRIVER", "MANAGER"] }, workspaceId: { not: null } }
+  } else {
+    where = { workspaceId }
+  }
+
+  if (role === "DRIVER") {
     where = { ...where, role: "DRIVER" }
   }
 

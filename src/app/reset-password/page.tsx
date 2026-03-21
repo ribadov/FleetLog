@@ -20,7 +20,7 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     if (!token) {
-      setError(t("invalidResetToken") || "Invalid reset token")
+      setError(t("invalidResetToken"))
     }
   }, [token, t])
 
@@ -29,17 +29,17 @@ export default function ResetPasswordPage() {
     setError("")
 
     if (!newPassword.trim()) {
-      setError(t("newPasswordRequired") || "New password is required")
+      setError(t("newPasswordRequired"))
       return
     }
 
     if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters")
+      setError(t("passwordMinLength"))
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setError(t("passwordMismatch") || "Passwords do not match")
+      setError(t("passwordMismatch"))
       return
     }
 
@@ -63,10 +63,10 @@ export default function ResetPasswordPage() {
           router.push("/login")
         }, 2000)
       } else {
-        setError(data.error || (t("passwordResetError") || "Error resetting password"))
+        setError(data.error || t("passwordResetError"))
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : (t("passwordResetError") || "Error resetting password"))
+      setError(err instanceof Error ? err.message : t("passwordResetError"))
     } finally {
       setLoading(false)
     }
@@ -79,7 +79,7 @@ export default function ResetPasswordPage() {
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8">
             <div className="text-center">
               <p className="text-red-600 dark:text-red-400 font-medium">
-                {t("invalidResetToken") || "Invalid or expired reset link"}
+                {t("invalidResetToken")}
               </p>
             </div>
           </div>
@@ -93,16 +93,16 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-md">
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-6 text-center">
-            {t("resetPasswordTitle") || "Reset Password"}
+            {t("resetPasswordTitle")}
           </h1>
 
           {success ? (
             <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
               <p className="text-green-600 dark:text-green-400 font-medium text-center">
-                {t("passwordResetSuccess") || "Password reset successfully"}
+                {t("passwordResetSuccess")}
               </p>
               <p className="text-green-600 dark:text-green-400 text-sm text-center mt-2">
-                Redirecting to login...
+                {t("redirectingToLogin")}
               </p>
             </div>
           ) : (
@@ -115,7 +115,7 @@ export default function ResetPasswordPage() {
 
               <div>
                 <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  {t("newPassword") || "New Password"}
+                  {t("newPassword")}
                 </label>
                 <input
                   id="newPassword"
@@ -129,7 +129,7 @@ export default function ResetPasswordPage() {
 
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  {t("confirmPassword") || "Confirm Password"}
+                  {t("confirmPassword")}
                 </label>
                 <input
                   id="confirmPassword"
@@ -146,7 +146,7 @@ export default function ResetPasswordPage() {
                 disabled={loading}
                 className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium transition disabled:cursor-not-allowed"
               >
-                {loading ? t("sending") || "Resetting..." : t("resetPassword") || "Reset Password"}
+                {loading ? t("resetting") : t("resetPassword")}
               </button>
             </form>
           )}

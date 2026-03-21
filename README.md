@@ -4,21 +4,23 @@ A fleet transport management web application built with Next.js 16, TypeScript, 
 
 ## Features
 
-- **Role-based access control**: ADMIN, DRIVER, CONTRACTOR, MANAGER roles
-- **Transport tracking**: Record container transports with from/to places, container size (20/40/45 ft), IMO/ADR flag, waiting time, price, driver, contractor, and seller
+- **Role-based access control**: ADMIN, DRIVER, CONTRACTOR, MANAGER roles (`CONTRACTOR` is shown as Auftraggeber/Client in UI)
+- **Transport tracking**: Record container transports with from/to places, container size (20/40/45 ft), IMO/ADR flag, waiting time, price, driver, Auftraggeber (`CONTRACTOR`), and seller
 - **Order numbers + freight letters**: Optional order number per container and PDF freight letter upload per transport
 - **Recurring places**: Entered places are stored and can be selected again in transport forms
 - **Multi-tenant workspaces**: Each manager has an isolated workspace (separate data environment)
-- **Price visibility**: Drivers cannot see prices; contractors and managers can
-- **Invoice control**: Only managers can create and send invoices; contractors receive sent invoices
+- **Price visibility**: Drivers cannot see prices; Auftraggeber and managers can
+- **Invoice control**: Only managers can create and send invoices; Auftraggeber receive sent invoices
 - **Authentication**: Credentials-based login with bcrypt password hashing
-- **Contractor onboarding**: Contractor registration requires company and tax details (company name, full address, VAT ID, tax number)
+- **Auftraggeber onboarding**: Auftraggeber registration requires company and tax details (company name, full address, VAT ID, tax number)
 
 ## Multi-Tenant Model
 
 - Each `MANAGER` registration creates a dedicated workspace with a unique `workspace code`
-- `DRIVER` and `CONTRACTOR` registrations must provide a valid workspace code to join the correct manager environment
-- Transports, invoices, users, and place suggestions are scoped to workspace boundaries
+- `DRIVER` registrations must provide a valid workspace code to join the correct manager environment
+- `CONTRACTOR` (Auftraggeber) registrations are not bound to a single workspace
+- Auftraggeber can create orders for multiple managers by entering a workspace code per order
+- Transports remain workspace-scoped; Auftraggeber visibility is scoped to their own assigned transports across workspaces
 - `ADMIN` has cross-workspace visibility via `/admin` and dashboard overview cards
 - Admin account is read-only for operational transport actions
 
@@ -34,10 +36,10 @@ npm run admin:set-password -- "your-secure-password"
 ## Invoicing Workflow
 
 - Log in as a user with role `MANAGER`
-- Open `Invoices` and create an invoice for a contractor with open containers
-- FleetLog creates one draft invoice containing all uninvoiced containers for that contractor
+- Open `Invoices` and create an invoice for an Auftraggeber (`CONTRACTOR`) with open containers
+- FleetLog creates one draft invoice containing all uninvoiced containers for that Auftraggeber in the current workspace
 - Open the invoice and click **Send invoice**
-- Sent invoices become visible to the contractor (received invoices)
+- Sent invoices become visible to the Auftraggeber (received invoices)
 - Invoiced transports are marked internally and are not included in the next invoice
 - Invoice details intentionally do **not** show the driver name
 - Open a sent invoice and click **Download PDF** (browser print flow) to save a PDF file
@@ -47,7 +49,7 @@ npm run admin:set-password -- "your-secure-password"
 
 - Header and footer are aligned to the reference invoice style (sender/recipient/meta/bank block)
 - Position table includes date, order number, container, from/to, notes, net, VAT (19%), and gross amount
-- Contractor registration data is printed on the invoice: company name, full address, country, VAT ID, and tax number
+- Auftraggeber registration data is printed on the invoice: company name, full address, country, VAT ID, and tax number
 
 ## Getting Started
 

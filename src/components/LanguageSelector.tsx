@@ -7,15 +7,17 @@ import { localeLabel, SUPPORTED_LOCALES, type Locale } from "@/lib/i18n";
 type Props = {
   currentLocale: Locale;
   label: string;
+  onLocaleChange?: (locale: Locale) => void;
 };
 
-export default function LanguageSelector({ currentLocale, label }: Props) {
+export default function LanguageSelector({ currentLocale, label, onLocaleChange }: Props) {
   const router = useRouter();
   const [value, setValue] = useState<Locale>(currentLocale);
   const [loading, setLoading] = useState(false);
 
   const onChange = async (nextLocale: Locale) => {
     setValue(nextLocale);
+    onLocaleChange?.(nextLocale);
     setLoading(true);
 
     await fetch("/api/language", {

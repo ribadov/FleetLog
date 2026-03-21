@@ -12,6 +12,7 @@ export type TransportRow = {
   id: string;
   date: string;
   orderNumber: string | null;
+  jobNumber?: string | null;
   fromPlace: string;
   toPlace: string;
   containerSize: string;
@@ -45,14 +46,14 @@ export default function TransportsTable({ transports: initial, role, userId, sho
   const [error, setError] = useState("");
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Diesen Transport löschen?")) return;
+    if (!confirm(tr("confirmDeleteTransport"))) return;
     setDeletingId(id);
     const res = await fetch(`/api/transports/${id}`, { method: "DELETE" });
     if (res.ok) {
       setTransports((prev) => prev.filter((t) => t.id !== id));
       router.refresh();
     } else {
-      setError("Transport konnte nicht gelöscht werden.");
+      setError(tr("transportDeleteFailed"));
     }
     setDeletingId(null);
   };
@@ -65,9 +66,9 @@ export default function TransportsTable({ transports: initial, role, userId, sho
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden">
         {transports.length === 0 ? (
           <div className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
-            No transports yet.{" "}
+            {tr("noTransportsYet")} {" "}
             <Link href="/transports/new" className="text-blue-600 hover:underline">
-              {tr("createAccount")}
+              {tr("createTransport")}
             </Link>.
           </div>
         ) : (
@@ -76,15 +77,16 @@ export default function TransportsTable({ transports: initial, role, userId, sho
               <thead>
                 <tr className="text-left text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
                   <th className="px-4 py-3 font-medium">{tr("date")}</th>
-                  <th className="px-4 py-3 font-medium">Order #</th>
+                  <th className="px-4 py-3 font-medium">{tr("containerNumber")}</th>
+                  <th className="px-4 py-3 font-medium">{tr("orderNumber")}</th>
                   <th className="px-4 py-3 font-medium">{tr("from")}</th>
                   <th className="px-4 py-3 font-medium">{tr("to")}</th>
                   <th className="px-4 py-3 font-medium">{tr("size")}</th>
-                  <th className="px-4 py-3 font-medium">IMO</th>
+                  <th className="px-4 py-3 font-medium">{tr("imo")}</th>
                   <th className="px-4 py-3 font-medium">{tr("waiting")}</th>
-                  <th className="px-4 py-3 font-medium">Driver</th>
-                  <th className="px-4 py-3 font-medium">Contractor</th>
-                  <th className="px-4 py-3 font-medium">Freight Letter</th>
+                  <th className="px-4 py-3 font-medium">{tr("driver")}</th>
+                  <th className="px-4 py-3 font-medium">{tr("contractor")}</th>
+                  <th className="px-4 py-3 font-medium">{tr("freightLetter")}</th>
                   {showPrice && <th className="px-4 py-3 font-medium">{tr("price")}</th>}
                   <th className="px-4 py-3 font-medium">{tr("actions")}</th>
                 </tr>
@@ -93,6 +95,7 @@ export default function TransportsTable({ transports: initial, role, userId, sho
                 {transports.map((transport) => {
                   const canEdit =
                     role === "MANAGER" ||
+                    role === "CONTRACTOR" ||
                     (role === "DRIVER" && transport.driver.id === userId);
 
                   return (
@@ -104,6 +107,7 @@ export default function TransportsTable({ transports: initial, role, userId, sho
                         {new Date(transport.date).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">{transport.orderNumber ?? "—"}</td>
+                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">{transport.jobNumber ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{transport.fromPlace}</td>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{transport.toPlace}</td>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{containerLabel(transport.containerSize)}</td>
@@ -154,7 +158,7 @@ export default function TransportsTable({ transports: initial, role, userId, sho
                               disabled={deletingId === transport.id}
                               className="px-2.5 py-1 text-xs font-medium text-red-600 hover:text-red-700 border border-red-300 dark:border-red-700 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
                             >
-                              {deletingId === transport.id ? "…" : "Löschen"}
+                              {deletingId === transport.id ? "…" : tr("delete")}
                             </button>
                           )}
                         </div>

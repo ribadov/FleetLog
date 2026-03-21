@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import LanguageSelector from "@/components/LanguageSelector";
+import { getTranslator, readClientLocale, type Locale } from "@/lib/i18n";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [locale] = useState<Locale>(() => readClientLocale());
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const t = useMemo(() => getTranslator(locale), [locale]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +30,7 @@ export default function LoginPage() {
     setLoading(false);
 
     if (result?.error) {
-      setError("Invalid email or password");
+      setError(t("invalidCredentials"));
     } else {
       router.push("/dashboard");
       router.refresh();
@@ -39,7 +43,10 @@ export default function LoginPage() {
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8">
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold text-blue-700 dark:text-blue-400">FleetLog</h1>
-            <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm">Sign in to your account</p>
+            <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm">{t("loginSubtitle")}</p>
+            <div className="mt-3 flex justify-center">
+              <LanguageSelector currentLocale={locale} label={t("language")} />
+            </div>
           </div>
 
           {error && (
@@ -76,6 +83,11 @@ export default function LoginPage() {
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                 placeholder="••••••••"
               />
+              <div className="mt-2 text-right">
+                <Link href="/forgot-password" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                  {t("forgotPassword")}
+                </Link>
+              </div>
             </div>
             <button
               type="submit"
@@ -87,9 +99,9 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-            Don&apos;t have an account?{" "}
+            {t("noAccountYet")}{" "}
             <Link href="/register" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
-              Register here
+              {t("registerHere")}
             </Link>
           </p>
         </div>

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { storePlaceIfPossible } from "@/lib/places"
+import { getTenantContext } from "@/lib/tenant"
 import { auth } from "@/auth"
 
 type Params = { params: Promise<{ id: string }> }
@@ -11,13 +13,17 @@ export async function GET(_req: Request, { params }: Params) {
   }
 
   const { id } = await params
+  const { isAdmin, workspaceId } = getTenantContext(session.user)
   const transport = await prisma.transport.findUnique({
     where: { id },
     include: { driver: true, contractor: true, seller: true },
   })
-
   if (!transport) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  if (!isAdmin && transport.workspaceId !== workspaceId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   if (
@@ -40,11 +46,20 @@ export async function PUT(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  if (session.user.role === "ADMIN") {
+    return NextResponse.json({ error: "Admins are read-only" }, { status: 403 })
+  }
+
   const { id } = await params
+  const { isAdmin, workspaceId } = getTenantContext(session.user)
 
   const transport = await prisma.transport.findUnique({ where: { id } })
   if (!transport) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  if (!isAdmin && transport.workspaceId !== workspaceId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   if (
@@ -58,6 +73,7 @@ export async function PUT(req: Request, { params }: Params) {
     const body = await req.json()
     const {
       date,
+      orderNumber,
       fromPlace,
       toPlace,
       containerSize,
@@ -75,6 +91,7 @@ export async function PUT(req: Request, { params }: Params) {
       where: { id },
       data: {
         ...(date && { date: new Date(date) }),
+        orderNumber: orderNumber !== undefined ? orderNumber || null : transport.orderNumber,
         ...(fromPlace && { fromPlace }),
         ...(toPlace && { toPlace }),
         ...(containerSize && { containerSize }),
@@ -90,6 +107,18 @@ export async function PUT(req: Request, { params }: Params) {
       include: { driver: true, contractor: true, seller: true },
     })
 
+    if (fromPlace) {
+      if (transport.workspaceId) {
+        await storePlaceIfPossible(transport.workspaceId, fromPlace)
+      }
+    }
+
+    if (toPlace) {
+      if (transport.workspaceId) {
+        await storePlaceIfPossible(transport.workspaceId, toPlace)
+      }
+    }
+
     return NextResponse.json(updated)
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -102,15 +131,24 @@ export async function DELETE(_req: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  if (session.user.role === "ADMIN") {
+    return NextResponse.json({ error: "Admins are read-only" }, { status: 403 })
+  }
+
   if (session.user.role !== "MANAGER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   const { id } = await params
+  const { isAdmin, workspaceId } = getTenantContext(session.user)
 
   const transport = await prisma.transport.findUnique({ where: { id } })
   if (!transport) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  if (!isAdmin && transport.workspaceId !== workspaceId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   await prisma.transport.delete({ where: { id } })

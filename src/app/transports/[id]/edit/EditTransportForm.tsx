@@ -8,12 +8,14 @@ type User = { id: string; name: string; role: string };
 type Transport = {
   id: string;
   date: string;
+  orderNumber: string | null;
   fromPlace: string;
   toPlace: string;
   containerSize: string;
   isIMO: boolean;
   waitingFrom: string | null;
   waitingTo: string | null;
+  freightLetterPath: string | null;
   price: number;
   notes: string | null;
   driverId: string;
@@ -24,14 +26,16 @@ type Transport = {
 type Props = {
   transport: Transport;
   users: User[];
+  places: string[];
   role: string;
 };
 
-export default function EditTransportForm({ transport, users, role }: Props) {
+export default function EditTransportForm({ transport, users, places, role }: Props) {
   const router = useRouter();
 
   const [form, setForm] = useState({
     date: transport.date.slice(0, 10),
+    orderNumber: transport.orderNumber ?? "",
     fromPlace: transport.fromPlace,
     toPlace: transport.toPlace,
     containerSize: transport.containerSize,
@@ -47,6 +51,7 @@ export default function EditTransportForm({ transport, users, role }: Props) {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [freightLetterFile, setFreightLetterFile] = useState<File | null>(null);
 
   const drivers = users.filter((u) => u.role === "DRIVER");
   const contractors = users.filter((u) => u.role === "CONTRACTOR" || u.role === "MANAGER");
@@ -86,6 +91,22 @@ export default function EditTransportForm({ transport, users, role }: Props) {
     setLoading(false);
 
     if (res.ok) {
+      if (freightLetterFile) {
+        const uploadData = new FormData();
+        uploadData.append("file", freightLetterFile);
+
+        const uploadResponse = await fetch(`/api/transports/${transport.id}/freight-letter`, {
+          method: "POST",
+          body: uploadData,
+        });
+
+        if (!uploadResponse.ok) {
+          const uploadError = await uploadResponse.json();
+          setError(uploadError.error || "Transport saved, but freight letter upload failed");
+          return;
+        }
+      }
+
       router.push("/transports");
     } else {
       const data = await res.json();
@@ -115,6 +136,18 @@ export default function EditTransportForm({ transport, users, role }: Props) {
             <input id="date" name="date" type="date" required value={form.date} onChange={handleChange} className={inputClass} />
           </div>
           <div>
+            <label htmlFor="orderNumber" className={labelClass}>Order Number</label>
+            <input
+              id="orderNumber"
+              name="orderNumber"
+              type="text"
+              value={form.orderNumber}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="Optional"
+            />
+          </div>
+          <div>
             <label htmlFor="containerSize" className={labelClass}>Container Size *</label>
             <select id="containerSize" name="containerSize" value={form.containerSize} onChange={handleChange} className={inputClass}>
               <option value="SIZE_20">20 ft</option>
@@ -127,13 +160,19 @@ export default function EditTransportForm({ transport, users, role }: Props) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
             <label htmlFor="fromPlace" className={labelClass}>From *</label>
-            <input id="fromPlace" name="fromPlace" type="text" required value={form.fromPlace} onChange={handleChange} className={inputClass} placeholder="City, Port…" />
+            <input id="fromPlace" name="fromPlace" list="place-options" type="text" required value={form.fromPlace} onChange={handleChange} className={inputClass} placeholder="City, Port…" />
           </div>
           <div>
             <label htmlFor="toPlace" className={labelClass}>To *</label>
-            <input id="toPlace" name="toPlace" type="text" required value={form.toPlace} onChange={handleChange} className={inputClass} placeholder="City, Port…" />
+            <input id="toPlace" name="toPlace" list="place-options" type="text" required value={form.toPlace} onChange={handleChange} className={inputClass} placeholder="City, Port…" />
           </div>
         </div>
+
+        <datalist id="place-options">
+          {places.map((place) => (
+            <option key={place} value={place} />
+          ))}
+        </datalist>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
@@ -208,6 +247,28 @@ export default function EditTransportForm({ transport, users, role }: Props) {
         <div>
           <label htmlFor="notes" className={labelClass}>Notes</label>
           <textarea id="notes" name="notes" rows={3} value={form.notes} onChange={handleChange} className={inputClass} placeholder="Optional notes…" />
+        </div>
+
+        <div>
+          <label htmlFor="freightLetter" className={labelClass}>Freight Letter (PDF)</label>
+          {transport.freightLetterPath && (
+            <a
+              href={transport.freightLetterPath}
+              target="_blank"
+              rel="noreferrer"
+              className="mb-2 inline-flex text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Open current freight letter
+            </a>
+          )}
+          <input
+            id="freightLetter"
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setFreightLetterFile(e.target.files?.[0] ?? null)}
+            className={inputClass}
+          />
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Max 10MB, PDF only.</p>
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-2">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/auth"
+import { getTenantContext } from "@/lib/tenant"
 
 export async function GET() {
   const session = await auth()
@@ -9,10 +10,15 @@ export async function GET() {
   }
 
   const role = session.user.role
+  const { isAdmin, workspaceId } = getTenantContext(session.user)
 
-  let where = {}
+  if (!isAdmin && !workspaceId) {
+    return NextResponse.json({ error: "Workspace missing" }, { status: 403 })
+  }
+
+  let where: Record<string, unknown> = isAdmin ? {} : { workspaceId }
   if (role === "DRIVER" || role === "CONTRACTOR") {
-    where = { role: "DRIVER" }
+    where = { ...where, role: "DRIVER" }
   }
 
   const users = await prisma.user.findMany({

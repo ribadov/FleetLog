@@ -12,17 +12,20 @@ declare module "next-auth" {
       name?: string | null
       email?: string | null
       image?: string | null
-      role: "DRIVER" | "CONTRACTOR" | "MANAGER"
+      role: "ADMIN" | "DRIVER" | "CONTRACTOR" | "MANAGER"
+      workspaceId?: string | null
     }
   }
   interface User {
-    role: "DRIVER" | "CONTRACTOR" | "MANAGER"
+    role: "ADMIN" | "DRIVER" | "CONTRACTOR" | "MANAGER"
+    workspaceId?: string | null
   }
 }
 
 type ExtendedJWT = JWT & {
   id: string
-  role: "DRIVER" | "CONTRACTOR" | "MANAGER"
+  role: "ADMIN" | "DRIVER" | "CONTRACTOR" | "MANAGER"
+  workspaceId?: string | null
 }
 
 const config: NextAuthConfig = {
@@ -54,6 +57,7 @@ const config: NextAuthConfig = {
           name: user.name,
           email: user.email,
           role: user.role,
+          workspaceId: user.workspaceId,
         }
       },
     }),
@@ -64,6 +68,7 @@ const config: NextAuthConfig = {
       if (user) {
         token.id = user.id as string
         ;(token as ExtendedJWT).role = user.role
+        ;(token as ExtendedJWT).workspaceId = user.workspaceId
       }
       return token
     },
@@ -72,6 +77,7 @@ const config: NextAuthConfig = {
       if (t) {
         session.user.id = t.id
         session.user.role = t.role
+        session.user.workspaceId = t.workspaceId ?? null
       }
       return session
     },
@@ -82,6 +88,7 @@ const config: NextAuthConfig = {
       const isProtectedRoute =
         nextUrl.pathname.startsWith("/dashboard") ||
         nextUrl.pathname.startsWith("/transports") ||
+        nextUrl.pathname.startsWith("/invoices") ||
         nextUrl.pathname.startsWith("/admin")
 
       if (isAuthRoute) {

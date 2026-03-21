@@ -7,12 +7,14 @@ type User = { id: string; name: string; role: string };
 
 interface Props {
   users: User[];
+  places: string[];
   currentUserId: string;
   currentUserRole: string;
 }
 
 const makeInitialForm = (userId: string, role: string) => ({
   date: "",
+  orderNumber: "",
   fromPlace: "",
   toPlace: "",
   containerSize: "SIZE_20",
@@ -26,9 +28,10 @@ const makeInitialForm = (userId: string, role: string) => ({
   notes: "",
 });
 
-export default function NewTransportForm({ users, currentUserId, currentUserRole }: Props) {
+export default function NewTransportForm({ users, places, currentUserId, currentUserRole }: Props) {
   const router = useRouter();
   const [form, setForm] = useState(() => makeInitialForm(currentUserId, currentUserRole));
+  const [freightLetterFile, setFreightLetterFile] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -70,6 +73,24 @@ export default function NewTransportForm({ users, currentUserId, currentUserRole
     setLoading(false);
 
     if (res.ok) {
+      const created = await res.json();
+
+      if (freightLetterFile) {
+        const uploadData = new FormData();
+        uploadData.append("file", freightLetterFile);
+
+        const uploadResponse = await fetch(`/api/transports/${created.id}/freight-letter`, {
+          method: "POST",
+          body: uploadData,
+        });
+
+        if (!uploadResponse.ok) {
+          const uploadError = await uploadResponse.json();
+          setError(uploadError.error || "Transport created, but freight letter upload failed");
+          return;
+        }
+      }
+
       router.push("/transports");
     } else {
       const data = await res.json();
@@ -99,6 +120,18 @@ export default function NewTransportForm({ users, currentUserId, currentUserRole
             <input id="date" name="date" type="date" required value={form.date} onChange={handleChange} className={inputClass} />
           </div>
           <div>
+            <label htmlFor="orderNumber" className={labelClass}>Order Number</label>
+            <input
+              id="orderNumber"
+              name="orderNumber"
+              type="text"
+              value={form.orderNumber}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="Optional"
+            />
+          </div>
+          <div>
             <label htmlFor="containerSize" className={labelClass}>Container Size *</label>
             <select id="containerSize" name="containerSize" value={form.containerSize} onChange={handleChange} className={inputClass}>
               <option value="SIZE_20">20 ft</option>
@@ -111,13 +144,19 @@ export default function NewTransportForm({ users, currentUserId, currentUserRole
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
             <label htmlFor="fromPlace" className={labelClass}>From *</label>
-            <input id="fromPlace" name="fromPlace" type="text" required value={form.fromPlace} onChange={handleChange} className={inputClass} placeholder="City, Port…" />
+            <input id="fromPlace" name="fromPlace" list="place-options" type="text" required value={form.fromPlace} onChange={handleChange} className={inputClass} placeholder="City, Port…" />
           </div>
           <div>
             <label htmlFor="toPlace" className={labelClass}>To *</label>
-            <input id="toPlace" name="toPlace" type="text" required value={form.toPlace} onChange={handleChange} className={inputClass} placeholder="City, Port…" />
+            <input id="toPlace" name="toPlace" list="place-options" type="text" required value={form.toPlace} onChange={handleChange} className={inputClass} placeholder="City, Port…" />
           </div>
         </div>
+
+        <datalist id="place-options">
+          {places.map((place) => (
+            <option key={place} value={place} />
+          ))}
+        </datalist>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
@@ -192,6 +231,18 @@ export default function NewTransportForm({ users, currentUserId, currentUserRole
         <div>
           <label htmlFor="notes" className={labelClass}>Notes</label>
           <textarea id="notes" name="notes" rows={3} value={form.notes} onChange={handleChange} className={inputClass} placeholder="Optional notes…" />
+        </div>
+
+        <div>
+          <label htmlFor="freightLetter" className={labelClass}>Freight Letter (PDF)</label>
+          <input
+            id="freightLetter"
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setFreightLetterFile(e.target.files?.[0] ?? null)}
+            className={inputClass}
+          />
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Max 10MB, PDF only.</p>
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-2">

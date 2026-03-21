@@ -1,0 +1,62 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DRIVER
+  CONTRACTOR
+  MANAGER
+}
+
+enum ContainerSize {
+  SIZE_20
+  SIZE_40
+  SIZE_45
+}
+
+model User {
+  id             String      @id @default(cuid())
+  name           String
+  email          String      @unique
+  password       String
+  role           Role        @default(DRIVER)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Relations
+  transportsAsDriver     Transport[] @relation("DriverTransports")
+  contractsAsContractor  Transport[] @relation("ContractorTransports")
+  contractsAsSeller      Transport[] @relation("SellerTransports")
+}
+
+model Transport {
+  id              String        @id @default(cuid())
+  date            DateTime
+  fromPlace       String
+  toPlace         String
+  containerSize   ContainerSize
+  isIMO           Boolean       @default(false)
+  waitingFrom     String?
+  waitingTo       String?
+  price           Float
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  driverId        String
+  driver          User          @relation("DriverTransports", fields: [driverId], references: [id])
+
+  contractorId    String?
+  contractor      User?         @relation("ContractorTransports", fields: [contractorId], references: [id])
+
+  sellerId        String?
+  seller          User?         @relation("SellerTransports", fields: [sellerId], references: [id])
+}

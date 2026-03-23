@@ -13,16 +13,28 @@ function resolveRuntimeDatabaseUrl() {
 		return configuredUrl
 	}
 
-	const sourceDbAbsolutePath = path.join(process.cwd(), "prisma", "dev.db")
+	const configuredPath = configuredUrl.replace("file:", "")
+	const candidates = [
+		path.resolve(process.cwd(), configuredPath),
+		path.join(process.cwd(), "prisma", "prisma", "dev.db"),
+		path.join(process.cwd(), "prisma", "dev.db"),
+	]
+	const sourceDbAbsolutePath = candidates.find((candidate) => {
+		try {
+			return fs.existsSync(candidate) && fs.statSync(candidate).size > 0
+		} catch {
+			return false
+		}
+	})
 	const writableDbAbsolutePath = "/tmp/fleetlog.db"
 
 	try {
 		if (!fs.existsSync(writableDbAbsolutePath)) {
-			if (fs.existsSync(sourceDbAbsolutePath)) {
+			if (sourceDbAbsolutePath && fs.existsSync(sourceDbAbsolutePath)) {
 				fs.copyFileSync(sourceDbAbsolutePath, writableDbAbsolutePath)
 			} else {
 				console.warn(
-					`[Prisma] Source SQLite DB not found at ${sourceDbAbsolutePath}. ` +
+					`[Prisma] Source SQLite DB not found in candidates: ${candidates.join(", ")}. ` +
 						"Netlify runtime may fail if schema is missing."
 				)
 			}

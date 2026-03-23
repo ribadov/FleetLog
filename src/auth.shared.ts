@@ -1,8 +1,15 @@
 import type { NextAuthConfig } from "next-auth"
 
-export const BASE_PATH = "/fleetlog"
+export const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH || "").trim()
+
+function stripBasePath(pathname: string) {
+  if (!BASE_PATH) return pathname
+  if (!pathname.startsWith(BASE_PATH)) return pathname
+  return pathname.slice(BASE_PATH.length) || "/"
+}
 
 const authSharedConfig: NextAuthConfig = {
+  trustHost: true,
   providers: [],
   pages: {
     signIn: "/login",
@@ -10,9 +17,7 @@ const authSharedConfig: NextAuthConfig = {
   callbacks: {
     async authorized({ auth: session, request: { nextUrl } }) {
       const isLoggedIn = !!session?.user
-      const pathname = nextUrl.pathname.startsWith(BASE_PATH)
-        ? nextUrl.pathname.slice(BASE_PATH.length) || "/"
-        : nextUrl.pathname
+      const pathname = stripBasePath(nextUrl.pathname)
       const isAuthRoute = pathname === "/login" || pathname === "/register"
       const isProtectedRoute =
         pathname.startsWith("/dashboard") ||
@@ -22,7 +27,7 @@ const authSharedConfig: NextAuthConfig = {
 
       if (isAuthRoute) {
         if (isLoggedIn) {
-          return Response.redirect(new URL(`${BASE_PATH}/dashboard`, nextUrl))
+          return Response.redirect(new URL(`${BASE_PATH || ""}/dashboard`, nextUrl))
         }
         return true
       }

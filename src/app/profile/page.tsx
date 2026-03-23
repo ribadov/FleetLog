@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { signOut, useSession } from "next-auth/react"
 import { getTranslator, readClientLocale, type Locale } from "@/lib/i18n"
@@ -37,9 +37,17 @@ type PartnerManager = {
   workspaceId: string | null
 }
 
+type WorkspaceDriver = {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+}
+
 export default function ProfilePage() {
   const router = useRouter()
-  const { status } = useSession()
+  const { status, update } = useSession()
+  const hasLoadedProfileRef = useRef(false)
   const [locale] = useState<Locale>(() => readClientLocale())
   const [loading, setLoading] = useState(true)
   const [saveLoading, setSaveLoading] = useState(false)
@@ -56,6 +64,7 @@ export default function ProfilePage() {
   const [partnerRemoveLoadingId, setPartnerRemoveLoadingId] = useState<string | null>(null)
   const [partnerMessage, setPartnerMessage] = useState("")
   const [partnerMessageType, setPartnerMessageType] = useState<"success" | "error" | null>(null)
+  const [workspaceDrivers, setWorkspaceDrivers] = useState<WorkspaceDriver[]>([])
   const [form, setForm] = useState<ProfileData | null>(null)
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -96,13 +105,29 @@ export default function ProfilePage() {
     setSelectedPartnerContractorIds(partnerData.selectedContractorIds)
   }
 
+  const loadManagerDrivers = async () => {
+    const usersResponse = await fetch("/api/users")
+    if (!usersResponse.ok) {
+      const payload = await usersResponse.json().catch(() => ({ error: "Failed to load drivers" }))
+      throw new Error(payload.error || "Failed to load drivers")
+    }
+
+    const usersData = await usersResponse.json() as WorkspaceDriver[]
+    const drivers = usersData
+      .filter((entry) => entry.role === "DRIVER")
+      .sort((left, right) => left.name.localeCompare(right.name))
+
+    setWorkspaceDrivers(drivers)
+  }
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login")
       return
     }
 
-    if (status === "authenticated") {
+    if (status === "authenticated" && !hasLoadedProfileRef.current) {
+      hasLoadedProfileRef.current = true
       const fetchProfile = async () => {
         try {
           setLoading(true)
@@ -121,6 +146,7 @@ export default function ProfilePage() {
             await loadContractorPartners()
           } else if (data.role === "MANAGER") {
             await loadManagerPartners()
+            await loadManagerDrivers()
           }
 
           setError("")
@@ -174,8 +200,6 @@ export default function ProfilePage() {
       payload.billingEmail = form.billingEmail
       payload.vatId = form.vatId
       payload.taxNumber = form.taxNumber
-      payload.invoiceEmailSubject = form.invoiceEmailSubject
-      payload.invoiceEmailBody = form.invoiceEmailBody
     }
 
     if (form.role === "MANAGER") {
@@ -183,6 +207,8 @@ export default function ProfilePage() {
       payload.bankAccountHolder = form.bankAccountHolder
       payload.iban = form.iban
       payload.bic = form.bic
+      payload.invoiceEmailSubject = form.invoiceEmailSubject
+      payload.invoiceEmailBody = form.invoiceEmailBody
     }
 
     if (showPasswordChange) {
@@ -208,6 +234,7 @@ export default function ProfilePage() {
         setError(data.error || "Failed to update profile")
       } else {
         setForm(data)
+        await update({ name: data.name, user: { name: data.name } })
         let partnerSaveError = ""
 
         if (form.role === "CONTRACTOR") {
@@ -244,9 +271,7 @@ export default function ProfilePage() {
         }
         setShowPasswordChange(false)
         setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
-        setTimeout(() => {
           router.refresh()
-        }, 1500)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update profile")
@@ -683,51 +708,53 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                    <h3 className="text-md font-semibold text-slate-900 dark:text-white mb-3">
-                      Rechnung E-Mail
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label htmlFor="invoiceEmailSubject" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                          E-Mail Betreff (mit Platzhalter)
-                        </label>
-                        <input
-                          id="invoiceEmailSubject"
-                          name="invoiceEmailSubject"
-                          type="text"
-                          value={form.invoiceEmailSubject || ""}
-                          onChange={handleChange}
-                          placeholder="{{companyName}} Rechnung Nr. {{invoiceNumber}}"
-                          className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                        />
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          {"Verfügbare Platzhalter: {{companyName}}, {{invoiceNumber}}, {{recipientName}}"}
-                        </p>
-                      </div>
+                  {form.role === "MANAGER" && (
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <h3 className="text-md font-semibold text-slate-900 dark:text-white mb-3">
+                        Rechnung E-Mail
+                      </h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label htmlFor="invoiceEmailSubject" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            E-Mail Betreff (mit Platzhalter)
+                          </label>
+                          <input
+                            id="invoiceEmailSubject"
+                            name="invoiceEmailSubject"
+                            type="text"
+                            value={form.invoiceEmailSubject || ""}
+                            onChange={handleChange}
+                            placeholder="{{companyName}} Rechnung Nr. {{invoiceNumber}}"
+                            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                          />
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {"Verfügbare Platzhalter: {{companyName}}, {{invoiceNumber}}, {{recipientName}}"}
+                          </p>
+                        </div>
 
-                      <div>
-                        <label htmlFor="invoiceEmailBody" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                          E-Mail Inhalt
-                        </label>
-                        <textarea
-                          id="invoiceEmailBody"
-                          name="invoiceEmailBody"
-                          value={form.invoiceEmailBody || ""}
-                          onChange={(event) => {
-                            const { name, value } = event.target
-                            setForm((previous) => (previous ? { ...previous, [name]: value } : null))
-                          }}
-                          placeholder={"Guten Tag {{recipientName}},\n\nanbei erhalten Sie die Rechnung Nr. {{invoiceNumber}} als PDF im Anhang.\n\nMit freundlichen Grüßen\n{{companyName}}"}
-                          rows={7}
-                          className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                        />
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          {"Verfügbare Platzhalter: {{companyName}}, {{invoiceNumber}}, {{recipientName}}"}
-                        </p>
+                        <div>
+                          <label htmlFor="invoiceEmailBody" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            E-Mail Inhalt
+                          </label>
+                          <textarea
+                            id="invoiceEmailBody"
+                            name="invoiceEmailBody"
+                            value={form.invoiceEmailBody || ""}
+                            onChange={(event) => {
+                              const { name, value } = event.target
+                              setForm((previous) => (previous ? { ...previous, [name]: value } : null))
+                            }}
+                            placeholder={"Guten Tag {{recipientName}},\n\nanbei erhalten Sie die Rechnung Nr. {{invoiceNumber}} als PDF im Anhang.\n\nMit freundlichen Grüßen\n{{companyName}}"}
+                            rows={7}
+                            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                          />
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {"Verfügbare Platzhalter: {{companyName}}, {{invoiceNumber}}, {{recipientName}}"}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             )}
@@ -857,6 +884,30 @@ export default function ProfilePage() {
                         >
                           {partnerRemoveLoadingId === contractor.id ? (t("saving") || "Speichern...") : "Entfernen"}
                         </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {form.role === "MANAGER" && (
+              <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                  Eigene Fahrer
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
+                  Diese Fahrer sind deinem Auftragnehmer-Workspace zugeordnet und stehen dir in der Transporterstellung zur Verfügung.
+                </p>
+
+                {workspaceDrivers.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Noch keine Fahrer im Workspace registriert.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {workspaceDrivers.map((driver) => (
+                      <div key={driver.id} className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
+                        <p className="font-medium">{driver.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{driver.email}</p>
                       </div>
                     ))}
                   </div>

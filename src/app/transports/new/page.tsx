@@ -44,8 +44,17 @@ export default async function NewTransportPage() {
     orderBy: { name: "asc" },
   });
 
+  const driverWorkspaceManagerId = session.user.role === "DRIVER" && workspaceId
+    ? (await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { managerId: true },
+      }))?.managerId ?? null
+    : null;
+
   const assignedContractorIds = session.user.role === "MANAGER"
     ? await listAssignedContractorIds(session.user.id)
+    : session.user.role === "DRIVER" && driverWorkspaceManagerId
+      ? await listAssignedContractorIds(driverWorkspaceManagerId)
     : []
 
   const assignedContractors = assignedContractorIds.length

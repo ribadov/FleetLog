@@ -97,5 +97,5 @@ Set the following environment variables in production:
 ```
 DATABASE_URL=file:./prisma/dev.db
 NEXTAUTH_SECRET=<random-secret>
-NEXTAUTH_URL=https://your-domain.com
+NEXTAUTH_URL=https://www.karr-logistik.com/fleetlog
 ```

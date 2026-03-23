@@ -67,7 +67,7 @@ export default function TransportsTable({ transports: initial, role, userId, sho
     "date_desc" | "date_asc" | "price_desc" | "price_asc" | "driver_asc" | "party_asc" | "size_asc"
   >("date_desc");
 
-  const partyLabel = role === "CONTRACTOR" ? "Auftraggeber" : "Auftragnehmer";
+  const partyLabel = "Auftraggeber";
 
   const partyNameOf = useCallback((transport: TransportRow) => {
     if (role === "CONTRACTOR") return transport.seller?.name ?? "—";

@@ -117,11 +117,13 @@ export async function PUT(req: Request) {
     // Build update data
     const updateData: Record<string, string | null> = {}
 
-    if (invoiceEmailSubject !== undefined) {
-      updateData.invoiceEmailSubject = invoiceEmailSubject?.trim() || null
-    }
-    if (invoiceEmailBody !== undefined) {
-      updateData.invoiceEmailBody = invoiceEmailBody?.trim() || null
+    if (user.role === "MANAGER") {
+      if (invoiceEmailSubject !== undefined) {
+        updateData.invoiceEmailSubject = invoiceEmailSubject?.trim() || null
+      }
+      if (invoiceEmailBody !== undefined) {
+        updateData.invoiceEmailBody = invoiceEmailBody?.trim() || null
+      }
     }
     
     if (name !== undefined && name?.trim()) {

@@ -110,12 +110,12 @@ export default function EditTransportForm({ transport, users, places, role, allo
     ? managers.filter((manager) => allowedManagerIds.includes(manager.id))
     : managers;
 
-  const showContractorField = role === "MANAGER";
+  const showContractorField = role === "MANAGER" || role === "DRIVER";
   const showSellerField = role === "CONTRACTOR";
-  const selectableContractors = showContractorField
+  const selectableContractors = (role === "MANAGER" || role === "DRIVER")
     ? (contractors.length > 0 ? contractors : fallbackContractors)
     : contractors;
-  const selectedContractorId = showContractorField
+  const selectedContractorId = (role === "MANAGER" || role === "DRIVER")
     ? (form.contractorId || selectableContractors[0]?.id || "")
     : form.contractorId;
 
@@ -416,27 +416,28 @@ export default function EditTransportForm({ transport, users, places, role, allo
           </button>
         </div>
 
-        <div>
-          <label htmlFor="driverId" className={labelClass}>{t("driver")} *</label>
-          <select
-            id="driverId"
-            name="driverId"
-            required
-            value={form.driverId}
-            onChange={handleChange}
-            disabled={role === "DRIVER"}
-            className={inputClass + (role === "DRIVER" ? " opacity-70 cursor-not-allowed" : "")}
-          >
-            <option value="">{t("selectDriver")}</option>
-            {drivers.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-        </div>
+        {role !== "DRIVER" && (
+          <div>
+            <label htmlFor="driverId" className={labelClass}>{t("driver")} *</label>
+            <select
+              id="driverId"
+              name="driverId"
+              required
+              value={form.driverId}
+              onChange={handleChange}
+              className={inputClass}
+            >
+              <option value="">{t("selectDriver")}</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {showContractorField && (
           <div>
-            <label htmlFor="contractorId" className={labelClass}>{t("contractor")} *</label>
+            <label htmlFor="contractorId" className={labelClass}>{role === "DRIVER" ? "Kunde" : t("contractor")} *</label>
             <select id="contractorId" name="contractorId" value={selectedContractorId} onChange={handleChange} className={inputClass} required>
               {selectableContractors.length === 0 && <option value="">{t("none")}</option>}
               {selectableContractors.map((c) => (
@@ -445,7 +446,7 @@ export default function EditTransportForm({ transport, users, places, role, allo
             </select>
             {selectableContractors.length === 0 && (
               <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                Keine zugewiesenen Auftraggeber vorhanden.
+                Keine zugewiesenen {role === "DRIVER" ? "Kunden" : "Auftraggeber"} vorhanden.
               </p>
             )}
           </div>

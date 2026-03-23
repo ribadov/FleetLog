@@ -61,13 +61,16 @@ export default function NewTransportForm({ users, places, currentUserId, current
     : managers;
 
   const showContractorField = currentUserRole === "MANAGER";
+  const showDriverContractorField = currentUserRole === "DRIVER";
   const showSellerField = currentUserRole === "CONTRACTOR";
   const selectableContractors = showContractorField ? contractors : contractors;
-  const selectedContractorId = showContractorField
-    ? (selectableContractors.some((entry) => entry.id === form.contractorId)
-      ? form.contractorId
-      : (selectableContractors[0]?.id || ""))
-    : form.contractorId;
+  const selectedContractorId = showDriverContractorField
+    ? form.contractorId
+    : showContractorField
+      ? (selectableContractors.some((entry) => entry.id === form.contractorId)
+        ? form.contractorId
+        : (selectableContractors[0]?.id || ""))
+      : form.contractorId;
   const currentUserWorkspaceId = users.find((entry) => entry.id === currentUserId)?.workspaceId ?? null;
   const availableDrivers = currentUserRole === "MANAGER"
     ? drivers.filter((driver) => currentUserWorkspaceId ? driver.workspaceId === currentUserWorkspaceId : true)
@@ -82,7 +85,7 @@ export default function NewTransportForm({ users, places, currentUserId, current
     ? (availableDrivers.some((entry) => entry.id === form.driverId) ? form.driverId : "")
     : form.driverId;
   const submitDisabled = loading
-    || (showContractorField && !selectedContractorId)
+    || ((showContractorField || showDriverContractorField) && !selectedContractorId)
     || ((currentUserRole === "MANAGER" || currentUserRole === "CONTRACTOR") && !selectedDriverId);
 
   const handleChange = (
@@ -93,9 +96,6 @@ export default function NewTransportForm({ users, places, currentUserId, current
       setForm((prev) => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
     } else {
       setForm((prev) => {
-        if (name === "contractorId" && currentUserRole === "MANAGER") {
-          return { ...prev, contractorId: value, driverId: "" };
-        }
         if (name === "sellerId" && currentUserRole === "CONTRACTOR") {
           return { ...prev, sellerId: value, driverId: "" };
         }
@@ -362,40 +362,42 @@ export default function NewTransportForm({ users, places, currentUserId, current
           </button>
         </div>
 
-        <div>
-          <label htmlFor="driverId" className={labelClass}>{t("driver")} *</label>
-          <select
-            id="driverId"
-            name="driverId"
-            required
-            value={selectedDriverId}
-            onChange={handleChange}
-            disabled={currentUserRole === "DRIVER" || (currentUserRole === "CONTRACTOR" && !form.sellerId)}
-            className={inputClass + ((currentUserRole === "DRIVER" || (currentUserRole === "CONTRACTOR" && !form.sellerId)) ? " opacity-70 cursor-not-allowed" : "")}
-          >
-            <option value="">{t("selectDriver")}</option>
-            {availableDrivers.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-          {currentUserRole === "MANAGER" && availableDrivers.length === 0 && (
-            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-              Für deinen Workspace sind aktuell keine Fahrer verfügbar.
-            </p>
-          )}
-          {currentUserRole === "CONTRACTOR" && !form.sellerId && (
-            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-              Bitte zuerst einen Auftragnehmer auswählen, dann werden passende Fahrer angezeigt.
-            </p>
-          )}
-          {currentUserRole === "CONTRACTOR" && form.sellerId && availableDrivers.length === 0 && (
-            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-              Für den ausgewählten Auftragnehmer sind aktuell keine Fahrer verfügbar.
-            </p>
-          )}
-        </div>
+        {currentUserRole !== "DRIVER" && (
+          <div>
+            <label htmlFor="driverId" className={labelClass}>{t("driver")} *</label>
+            <select
+              id="driverId"
+              name="driverId"
+              required
+              value={selectedDriverId}
+              onChange={handleChange}
+              disabled={currentUserRole === "CONTRACTOR" && !form.sellerId}
+              className={inputClass + ((currentUserRole === "CONTRACTOR" && !form.sellerId) ? " opacity-70 cursor-not-allowed" : "")}
+            >
+              <option value="">{t("selectDriver")}</option>
+              {availableDrivers.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            {currentUserRole === "MANAGER" && availableDrivers.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                Für deinen Workspace sind aktuell keine Fahrer verfügbar.
+              </p>
+            )}
+            {currentUserRole === "CONTRACTOR" && !form.sellerId && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                Bitte zuerst einen Auftragnehmer auswählen, dann werden passende Fahrer angezeigt.
+              </p>
+            )}
+            {currentUserRole === "CONTRACTOR" && form.sellerId && availableDrivers.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                Für den ausgewählten Auftragnehmer sind aktuell keine Fahrer verfügbar.
+              </p>
+            )}
+          </div>
+        )}
 
-        {showContractorField && (
+        {(showContractorField || showDriverContractorField) && (
           <div>
             <label htmlFor="contractorId" className={labelClass}>{t("contractor")} *</label>
             <select
@@ -406,11 +408,16 @@ export default function NewTransportForm({ users, places, currentUserId, current
               className={inputClass}
               required
             >
-              {selectableContractors.length === 0 && <option value="">{t("none")}</option>}
+              <option value="">{t("none")}</option>
               {selectableContractors.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {currentUserRole === "DRIVER" && (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Wähle den Auftraggeber aus den Auftraggebern deines Auftragnehmers.
+              </p>
+            )}
             {selectableContractors.length === 0 && (
               <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
                 Du hast noch keine Auftragnehmer. Bitte füge zuerst im Profil per Workspace-Code Auftragnehmer hinzu.

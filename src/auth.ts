@@ -5,6 +5,8 @@ import bcrypt from "bcryptjs"
 import type { NextAuthConfig } from "next-auth"
 import type { JWT } from "@auth/core/jwt"
 
+const BASE_PATH = "/fleetlog"
+
 declare module "next-auth" {
   interface Session {
     user: {
@@ -64,18 +66,30 @@ const config: NextAuthConfig = {
   ],
   session: { strategy: "jwt" },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id as string
+        token.name = user.name
         ;(token as ExtendedJWT).role = user.role
         ;(token as ExtendedJWT).workspaceId = user.workspaceId
       }
+
+      if (trigger === "update" && session) {
+        const updatePayload = session as { name?: unknown; user?: { name?: unknown } }
+        if (typeof updatePayload.name === "string") {
+          token.name = updatePayload.name
+        } else if (typeof updatePayload.user?.name === "string") {
+          token.name = updatePayload.user.name
+        }
+      }
+
       return token
     },
     async session({ session, token }) {
       const t = token as ExtendedJWT
       if (t) {
         session.user.id = t.id
+        session.user.name = token.name
         session.user.role = t.role
         session.user.workspaceId = t.workspaceId ?? null
       }
@@ -83,17 +97,20 @@ const config: NextAuthConfig = {
     },
     async authorized({ auth: session, request: { nextUrl } }) {
       const isLoggedIn = !!session?.user
+      const pathname = nextUrl.pathname.startsWith(BASE_PATH)
+        ? nextUrl.pathname.slice(BASE_PATH.length) || "/"
+        : nextUrl.pathname
       const isAuthRoute =
-        nextUrl.pathname === "/login" || nextUrl.pathname === "/register"
+        pathname === "/login" || pathname === "/register"
       const isProtectedRoute =
-        nextUrl.pathname.startsWith("/dashboard") ||
-        nextUrl.pathname.startsWith("/transports") ||
-        nextUrl.pathname.startsWith("/invoices") ||
-        nextUrl.pathname.startsWith("/admin")
+        pathname.startsWith("/dashboard") ||
+        pathname.startsWith("/transports") ||
+        pathname.startsWith("/invoices") ||
+        pathname.startsWith("/admin")
 
       if (isAuthRoute) {
         if (isLoggedIn) {
-          return Response.redirect(new URL("/dashboard", nextUrl))
+          return Response.redirect(new URL(`${BASE_PATH}/dashboard`, nextUrl))
         }
         return true
       }

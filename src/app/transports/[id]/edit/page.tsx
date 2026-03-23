@@ -57,9 +57,28 @@ export default async function EditTransportPage({ params }: Props) {
     orderBy: { name: "asc" },
   });
 
+  const assignedManagerIds = session.user.role === "CONTRACTOR"
+    ? await listAssignedManagerIds(session.user.id)
+    : []
+
+  // For DRIVER: get manager's assigned contractor IDs
+  let driverManagerContractorIds: string[] = [];
+  if (session.user.role === "DRIVER") {
+    const driverWorkspace = await prisma.workspace.findUnique({
+      where: { id: transport.workspaceId ?? workspaceId ?? "" },
+      select: { managerId: true },
+    });
+
+    if (driverWorkspace?.managerId) {
+      driverManagerContractorIds = await listAssignedContractorIds(driverWorkspace.managerId);
+    }
+  }
+
   const assignedContractorIds = session.user.role === "MANAGER"
     ? await listAssignedContractorIds(session.user.id)
-    : []
+    : session.user.role === "DRIVER"
+      ? driverManagerContractorIds
+      : []
 
   const assignedContractors = assignedContractorIds.length
     ? await prisma.user.findMany({
@@ -69,14 +88,10 @@ export default async function EditTransportPage({ params }: Props) {
       })
     : []
 
-  const usersCombined = [
+  const usersCombined: typeof usersRaw = [
     ...usersRaw,
     ...assignedContractors.filter((candidate) => !usersRaw.some((existing) => existing.id === candidate.id)),
   ]
-
-  const assignedManagerIds = session.user.role === "CONTRACTOR"
-    ? await listAssignedManagerIds(session.user.id)
-    : []
 
   const places = await listPlaceNames(transport.workspaceId ?? workspaceId ?? "");
 

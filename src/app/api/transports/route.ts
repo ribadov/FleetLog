@@ -128,6 +128,24 @@ export async function POST(req: Request) {
 
     if (session.user.role === "MANAGER") {
       resolvedSellerId = session.user.id
+    } else if (session.user.role === "DRIVER") {
+      if (!targetWorkspaceId) {
+        return NextResponse.json({ error: "Workspace missing" }, { status: 403 })
+      }
+
+      const driverWorkspace = await prisma.workspace.findUnique({
+        where: { id: targetWorkspaceId },
+        select: { managerId: true },
+      })
+
+      if (!driverWorkspace?.managerId) {
+        return NextResponse.json(
+          { error: "No manager found for driver workspace" },
+          { status: 400 }
+        )
+      }
+
+      resolvedSellerId = driverWorkspace.managerId
     }
 
     if (session.user.role === "CONTRACTOR" && !resolvedSellerId) {
@@ -211,10 +229,18 @@ export async function POST(req: Request) {
             { status: 400 }
           )
         }
+      } else if (session.user.role === "DRIVER" && resolvedSellerId) {
+        const assigned = await isManagerAssignedToContractor(resolvedContractorId, resolvedSellerId)
+        if (!assigned) {
+          return NextResponse.json(
+            { error: "Client is not assigned to your manager" },
+            { status: 400 }
+          )
+        }
       }
     }
 
-    if (session.user.role === "MANAGER" && !resolvedContractorId) {
+    if ((session.user.role === "MANAGER" || session.user.role === "DRIVER") && !resolvedContractorId) {
       return NextResponse.json(
         { error: "Client is required" },
         { status: 400 }

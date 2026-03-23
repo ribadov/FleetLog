@@ -1,0 +1,199 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DRIVER
+  CONTRACTOR
+  MANAGER
+}
+
+enum ContainerSize {
+  SIZE_20
+  SIZE_40
+  SIZE_45
+}
+
+model User {
+  id             String      @id @default(cuid())
+  name           String
+  email          String      @unique
+  phoneNumber    String?
+  preferredLanguage String?
+  billingEmail   String?
+  invoiceEmailSubject String?   // Standard-Betreff für Rechnungs-E-Mails
+  invoiceEmailBody    String?   // Standard-Text für Rechnungs-E-Mails
+  password       String
+  role           Role        @default(DRIVER)
+  companyName    String?
+  companyStreet  String?
+  companyHouseNumber String?
+  companyPostalCode String?
+  companyCity    String?
+  companyCountry String?
+  vatId          String?
+  taxNumber      String?
+  bankName       String?
+  bankAccountHolder String?
+  iban           String?
+  bic            String?
+  logoPath       String?
+  workspaceId    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  workspace      Workspace?  @relation(fields: [workspaceId], references: [id])
+
+  // Relations
+  transportsAsDriver     Transport[] @relation("DriverTransports")
+  contractsAsContractor  Transport[] @relation("ContractorTransports")
+  contractsAsSeller      Transport[] @relation("SellerTransports")
+  invoicesAsContractor   Invoice[]   @relation("InvoiceContractor")
+  invoicesSent           Invoice[]   @relation("InvoiceSender")
+  managedWorkspaces      Workspace[] @relation("WorkspaceManager")
+  contractorPartners     ContractorPartnerAssignment[] @relation("ContractorPartners")
+  managerClients         ContractorPartnerAssignment[] @relation("ManagerClients")
+  passwordResetTokens    PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String      @id @default(cuid())
+  token     String      @unique
+  email     String
+  expiresAt DateTime
+  createdAt DateTime    @default(now())
+
+  user      User        @relation(fields: [email], references: [email], onDelete: Cascade)
+
+  @@index([token])
+  @@index([email])
+}
+
+model Workspace {
+  id            String      @id @default(cuid())
+  name          String
+  code          String      @unique
+  managerId     String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  manager       User        @relation("WorkspaceManager", fields: [managerId], references: [id])
+  users         User[]
+  transports    Transport[]
+  invoices      Invoice[]
+  places        Place[]
+}
+
+model Invoice {
+  id            String      @id @default(cuid())
+  invoiceNumber String      @unique
+  totalAmount   Float
+  itemsCount    Int
+  recipientEmail String
+  sentAt        DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  contractorId  String
+  contractor    User        @relation("InvoiceContractor", fields: [contractorId], references: [id])
+
+  workspaceId   String?
+  workspace     Workspace?  @relation(fields: [workspaceId], references: [id])
+
+  sentById      String?
+  sentBy        User?       @relation("InvoiceSender", fields: [sentById], references: [id])
+
+  transports    Transport[]
+}
+
+model Transport {
+  id              String        @id @default(cuid())
+  date            DateTime
+  orderNumber     String?
+  jobNumber       String?
+  fromPlace       String
+  toPlace         String
+  containerSize   ContainerSize
+  isIMO           Boolean       @default(false)
+  waitingFrom     String?
+  waitingTo       String?
+  freightLetterPath String?
+  basePrice       Float         @default(0)
+  waitingMinutes  Int           @default(0)
+  waitingSurcharge Float        @default(0)
+  imoSurcharge    Float         @default(0)
+  price           Float
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  workspaceId     String?
+  workspace       Workspace?    @relation(fields: [workspaceId], references: [id])
+
+  driverId        String
+  driver          User          @relation("DriverTransports", fields: [driverId], references: [id])
+
+  contractorId    String?
+  contractor      User?         @relation("ContractorTransports", fields: [contractorId], references: [id])
+  sellerId        String?
+  seller          User?         @relation("SellerTransports", fields: [sellerId], references: [id])
+
+  invoiceId       String?
+  invoice         Invoice?      @relation(fields: [invoiceId], references: [id])
+  legs            TransportLeg[]
+}
+
+model ContractorPartnerAssignment {
+  id           String   @id @default(cuid())
+  contractorId String
+  managerId    String
+  createdAt    DateTime @default(now())
+
+  contractor   User     @relation("ContractorPartners", fields: [contractorId], references: [id], onDelete: Cascade)
+  manager      User     @relation("ManagerClients", fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@unique([contractorId, managerId])
+  @@index([contractorId])
+  @@index([managerId])
+}
+
+model TransportLeg {
+  id               String     @id @default(cuid())
+  sequence         Int
+  fromPlace        String
+  toPlace          String
+  waitingFrom      String?
+  waitingTo        String?
+  isIMO            Boolean    @default(false)
+  basePrice        Float      @default(0)
+  waitingMinutes   Int        @default(0)
+  waitingSurcharge Float      @default(0)
+  totalPrice       Float      @default(0)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  transportId      String
+  transport        Transport  @relation(fields: [transportId], references: [id], onDelete: Cascade)
+
+  @@index([transportId, sequence])
+}
+
+model Place {
+  id          String      @id @default(cuid())
+  name        String
+  workspaceId String?
+  workspace   Workspace?  @relation(fields: [workspaceId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([workspaceId, name])
+}

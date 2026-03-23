@@ -1,0 +1,1092 @@
+"use client"
+
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
+import { signOut, useSession } from "next-auth/react"
+import { getTranslator, readClientLocale, type Locale } from "@/lib/i18n"
+
+type UserRole = "DRIVER" | "CONTRACTOR" | "MANAGER" | "ADMIN"
+
+interface ProfileData {
+  id: string
+  name: string
+  email: string
+  phoneNumber: string | null
+  preferredLanguage: string | null
+  role: UserRole
+  companyName: string | null
+  companyStreet: string | null
+  companyHouseNumber: string | null
+  companyPostalCode: string | null
+  companyCity: string | null
+  companyCountry: string | null
+  billingEmail: string | null
+  vatId: string | null
+  taxNumber: string | null
+  bankName: string | null
+  bankAccountHolder: string | null
+  iban: string | null
+  bic: string | null
+  invoiceEmailSubject: string | null
+  invoiceEmailBody: string | null
+}
+
+type PartnerManager = {
+  id: string
+  name: string
+  workspaceId: string | null
+}
+
+type WorkspaceDriver = {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+}
+
+export default function ProfilePage() {
+  const router = useRouter()
+  const { status, update } = useSession()
+  const hasLoadedProfileRef = useRef(false)
+  const [locale] = useState<Locale>(() => readClientLocale())
+  const [loading, setLoading] = useState(true)
+  const [saveLoading, setSaveLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+  const [showPasswordChange, setShowPasswordChange] = useState(false)
+  const [deletePassword, setDeletePassword] = useState("")
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [partnerManagers, setPartnerManagers] = useState<PartnerManager[]>([])
+  const [selectedPartnerManagerIds, setSelectedPartnerManagerIds] = useState<string[]>([])
+  const [selectedPartnerContractorIds, setSelectedPartnerContractorIds] = useState<string[]>([])
+  const [partnerWorkspaceCode, setPartnerWorkspaceCode] = useState("")
+  const [partnerAddLoading, setPartnerAddLoading] = useState(false)
+  const [partnerRemoveLoadingId, setPartnerRemoveLoadingId] = useState<string | null>(null)
+  const [partnerMessage, setPartnerMessage] = useState("")
+  const [partnerMessageType, setPartnerMessageType] = useState<"success" | "error" | null>(null)
+  const [workspaceDrivers, setWorkspaceDrivers] = useState<WorkspaceDriver[]>([])
+  const [form, setForm] = useState<ProfileData | null>(null)
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  })
+  const t = useMemo(() => getTranslator(locale), [locale])
+
+  const loadContractorPartners = async () => {
+    const partnerResponse = await fetch("/api/contractor-partners")
+    if (!partnerResponse.ok) {
+      const payload = await partnerResponse.json().catch(() => ({ error: "Failed to load subcontractors" }))
+      throw new Error(payload.error || "Failed to load subcontractors")
+    }
+
+    const partnerData = await partnerResponse.json() as {
+      managers: PartnerManager[]
+      selectedManagerIds: string[]
+    }
+
+    setPartnerManagers(partnerData.managers)
+    setSelectedPartnerManagerIds(partnerData.selectedManagerIds)
+  }
+
+  const loadManagerPartners = async () => {
+    const partnerResponse = await fetch("/api/contractor-partners")
+    if (!partnerResponse.ok) {
+      const payload = await partnerResponse.json().catch(() => ({ error: "Failed to load subcontractors" }))
+      throw new Error(payload.error || "Failed to load subcontractors")
+    }
+
+    const partnerData = await partnerResponse.json() as {
+      contractors: PartnerManager[]
+      selectedContractorIds: string[]
+    }
+
+    setPartnerManagers(partnerData.contractors)
+    setSelectedPartnerContractorIds(partnerData.selectedContractorIds)
+  }
+
+  const loadManagerDrivers = async () => {
+    const usersResponse = await fetch("/api/users")
+    if (!usersResponse.ok) {
+      const payload = await usersResponse.json().catch(() => ({ error: "Failed to load drivers" }))
+      throw new Error(payload.error || "Failed to load drivers")
+    }
+
+    const usersData = await usersResponse.json() as WorkspaceDriver[]
+    const drivers = usersData
+      .filter((entry) => entry.role === "DRIVER")
+      .sort((left, right) => left.name.localeCompare(right.name))
+
+    setWorkspaceDrivers(drivers)
+  }
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login")
+      return
+    }
+
+    if (status === "authenticated" && !hasLoadedProfileRef.current) {
+      hasLoadedProfileRef.current = true
+      const fetchProfile = async () => {
+        try {
+          setLoading(true)
+          const res = await fetch("/api/profile")
+          if (!res.ok) {
+            if (res.status === 401) {
+              router.push("/login")
+              return
+            }
+            throw new Error("Failed to fetch profile")
+          }
+          const data = await res.json() as ProfileData
+          setForm(data)
+
+          if (data.role === "CONTRACTOR") {
+            await loadContractorPartners()
+          } else if (data.role === "MANAGER") {
+            await loadManagerPartners()
+            await loadManagerDrivers()
+          }
+
+          setError("")
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to load profile")
+        } finally {
+          setLoading(false)
+        }
+      }
+
+      fetchProfile()
+    }
+  }, [status, router])
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (form) {
+      setForm((prev) =>
+        prev ? { ...prev, [e.target.name]: e.target.value } : null
+      )
+    }
+  }
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPasswordForm((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form) return
+
+    setError("")
+    setSuccess("")
+    setSaveLoading(true)
+
+    const payload: Record<string, string | null> = {
+      name: form.name,
+      phoneNumber: form.phoneNumber,
+      preferredLanguage: form.preferredLanguage,
+    }
+
+    if (form.role === "CONTRACTOR" || form.role === "MANAGER") {
+      payload.companyName = form.companyName
+      payload.companyStreet = form.companyStreet
+      payload.companyHouseNumber = form.companyHouseNumber
+      payload.companyPostalCode = form.companyPostalCode
+      payload.companyCity = form.companyCity
+      payload.companyCountry = form.companyCountry
+      payload.billingEmail = form.billingEmail
+      payload.vatId = form.vatId
+      payload.taxNumber = form.taxNumber
+    }
+
+    if (form.role === "MANAGER") {
+      payload.bankName = form.bankName
+      payload.bankAccountHolder = form.bankAccountHolder
+      payload.iban = form.iban
+      payload.bic = form.bic
+      payload.invoiceEmailSubject = form.invoiceEmailSubject
+      payload.invoiceEmailBody = form.invoiceEmailBody
+    }
+
+    if (showPasswordChange) {
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        setError(t("passwordMismatch") || "Passwords do not match")
+        setSaveLoading(false)
+        return
+      }
+      payload.currentPassword = passwordForm.currentPassword
+      payload.newPassword = passwordForm.newPassword
+    }
+
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || "Failed to update profile")
+      } else {
+        setForm(data)
+        await update({ name: data.name, user: { name: data.name } })
+        let partnerSaveError = ""
+
+        if (form.role === "CONTRACTOR") {
+          const partnerRes = await fetch("/api/contractor-partners", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ managerIds: selectedPartnerManagerIds }),
+          })
+
+          if (!partnerRes.ok) {
+            const partnerData = await partnerRes.json()
+            partnerSaveError = partnerData.error || "Failed to update subcontractors"
+          } else {
+            await loadContractorPartners()
+          }
+        } else if (form.role === "MANAGER") {
+          const partnerRes = await fetch("/api/contractor-partners", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contractorIds: selectedPartnerContractorIds }),
+          })
+
+          if (!partnerRes.ok) {
+            const partnerData = await partnerRes.json()
+            partnerSaveError = partnerData.error || "Failed to update subcontractors"
+          } else {
+            await loadManagerPartners()
+          }
+        }
+
+        setSuccess(t("profileUpdated") || "Profile updated successfully")
+        if (partnerSaveError) {
+          setError(partnerSaveError)
+        }
+        setShowPasswordChange(false)
+        setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
+          router.refresh()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update profile")
+    } finally {
+      setSaveLoading(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword.trim()) {
+      setError(t("currentPassword") || "Current Password")
+      return
+    }
+
+    const confirmed = window.confirm(
+      t("deleteAccountConfirmation") || "Are you sure you want to delete your account?"
+    )
+    if (!confirmed) return
+
+    setError("")
+    setSuccess("")
+    setDeleteLoading(true)
+
+    try {
+      const res = await fetch("/api/account-delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || (t("accountDeleteError") || "Error deleting account"))
+        return
+      }
+
+      setSuccess(t("accountDeletedSuccessfully") || "Account deleted successfully")
+      await signOut({ callbackUrl: "/login" })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : (t("accountDeleteError") || "Error deleting account"))
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  const togglePartnerManager = (managerId: string) => {
+    setSelectedPartnerManagerIds((previous) =>
+      previous.includes(managerId)
+        ? previous.filter((entry) => entry !== managerId)
+        : [...previous, managerId]
+    )
+  }
+
+  const togglePartnerContractor = (contractorId: string) => {
+    setSelectedPartnerContractorIds((previous) =>
+      previous.includes(contractorId)
+        ? previous.filter((entry) => entry !== contractorId)
+        : [...previous, contractorId]
+    )
+  }
+
+  const handleAddPartnerByCode = async () => {
+    const normalizedCode = partnerWorkspaceCode.trim().toUpperCase()
+    const isManagerRole = form?.role === "MANAGER"
+    const partnerLabel = isManagerRole ? "Auftraggeber" : "Auftragnehmer"
+    if (!normalizedCode) {
+      setPartnerMessage(t("workspaceCode") || "Workspace code")
+      setPartnerMessageType("error")
+      return
+    }
+
+    setError("")
+    setSuccess("")
+    setPartnerMessage("")
+    setPartnerMessageType(null)
+    setPartnerAddLoading(true)
+
+    try {
+      const response = await fetch("/api/contractor-partners", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceCode: normalizedCode }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok) {
+        setPartnerMessage(payload.error || `Ungültiger ${partnerLabel}-Code`)
+        setPartnerMessageType("error")
+        return
+      }
+
+      setSuccess(`${partnerLabel} hinzugefügt`)
+      setPartnerMessage(`${partnerLabel} hinzugefügt`)
+      setPartnerMessageType("success")
+      setPartnerWorkspaceCode("")
+      if (form?.role === "MANAGER") {
+        await loadManagerPartners()
+      } else {
+        await loadContractorPartners()
+      }
+    } catch (requestError) {
+      setPartnerMessage(requestError instanceof Error ? requestError.message : `Ungültiger ${partnerLabel}-Code`)
+      setPartnerMessageType("error")
+    } finally {
+      setPartnerAddLoading(false)
+    }
+  }
+
+  const handleRemoveManagerContractor = async (contractorId: string) => {
+    if (form?.role !== "MANAGER") {
+      return
+    }
+
+    setError("")
+    setSuccess("")
+    setPartnerMessage("")
+    setPartnerMessageType(null)
+    setPartnerRemoveLoadingId(contractorId)
+
+    const nextIds = selectedPartnerContractorIds.filter((id) => id !== contractorId)
+
+    try {
+      const response = await fetch("/api/contractor-partners", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractorIds: nextIds }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setPartnerMessage((payload as { error?: string }).error || "Auftraggeber konnte nicht entfernt werden")
+        setPartnerMessageType("error")
+        return
+      }
+
+      setSelectedPartnerContractorIds(nextIds)
+      await loadManagerPartners()
+      setSuccess("Auftraggeber entfernt")
+      setPartnerMessage("Auftraggeber entfernt")
+      setPartnerMessageType("success")
+    } catch (requestError) {
+      setPartnerMessage(requestError instanceof Error ? requestError.message : "Auftraggeber konnte nicht entfernt werden")
+      setPartnerMessageType("error")
+    } finally {
+      setPartnerRemoveLoadingId(null)
+    }
+  }
+
+  const handleRemoveContractorSubcontractor = async (managerId: string) => {
+    if (form?.role !== "CONTRACTOR") {
+      return
+    }
+
+    setError("")
+    setSuccess("")
+    setPartnerMessage("")
+    setPartnerMessageType(null)
+    setPartnerRemoveLoadingId(managerId)
+
+    const nextIds = selectedPartnerManagerIds.filter((id) => id !== managerId)
+
+    try {
+      const response = await fetch("/api/contractor-partners", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ managerIds: nextIds }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setPartnerMessage((payload as { error?: string }).error || "Auftragnehmer konnte nicht entfernt werden")
+        setPartnerMessageType("error")
+        return
+      }
+
+      setSelectedPartnerManagerIds(nextIds)
+      await loadContractorPartners()
+      setSuccess("Auftragnehmer entfernt")
+      setPartnerMessage("Auftragnehmer entfernt")
+      setPartnerMessageType("success")
+    } catch (requestError) {
+      setPartnerMessage(requestError instanceof Error ? requestError.message : "Auftragnehmer konnte nicht entfernt werden")
+      setPartnerMessageType("error")
+    } finally {
+      setPartnerRemoveLoadingId(null)
+    }
+  }
+
+  if (status === "loading" || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-slate-600">{t("loading")}</div>
+      </div>
+    )
+  }
+
+  if (!form) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-slate-600">{t("profileLoadingError")}</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-8 px-4">
+      <div className="max-w-3xl mx-auto">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">
+            {t("profile") || "Profile"}
+          </h1>
+
+          {error && (
+            <div className="mb-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="mb-4 p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400">
+              {success}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Basic Information */}
+            <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                {t("basicInformation") || "Basic Information"}
+              </h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    {t("name") || "Full Name"}
+                  </label>
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    value={form.name}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    {t("email") || "Email"}
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={form.email}
+                    disabled
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-600 text-slate-900 dark:text-slate-100 cursor-not-allowed opacity-50 outline-none"
+                  />
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {t("emailCannotBeChanged") || "Email cannot be changed"}
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="phoneNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    {t("phoneNumber") || "Phone Number"}
+                  </label>
+                  <input
+                    id="phoneNumber"
+                    name="phoneNumber"
+                    type="tel"
+                    value={form.phoneNumber || ""}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    placeholder="+49 176 12345678"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="preferredLanguage" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    {t("language") || "Language"}
+                  </label>
+                  <select
+                    id="preferredLanguage"
+                    name="preferredLanguage"
+                    value={form.preferredLanguage || ""}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  >
+                    <option value="">{t("selectLanguage") || "Select Language"}</option>
+                    <option value="de">Deutsch</option>
+                    <option value="en">English</option>
+                    <option value="ru">Русский</option>
+                    <option value="tr">Türkçe</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Company Information (for CONTRACTOR and MANAGER) */}
+            {(form.role === "CONTRACTOR" || form.role === "MANAGER") && (
+              <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                  {t("companyInformation") || "Company Information"}
+                </h2>
+
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="companyName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t("companyName") || "Company Name"}
+                    </label>
+                    <input
+                      id="companyName"
+                      name="companyName"
+                      type="text"
+                      value={form.companyName || ""}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="companyStreet" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t("street") || "Street"}
+                    </label>
+                    <input
+                      id="companyStreet"
+                      name="companyStreet"
+                      type="text"
+                      value={form.companyStreet || ""}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="companyHouseNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {t("houseNumber") || "House Number"}
+                      </label>
+                      <input
+                        id="companyHouseNumber"
+                        name="companyHouseNumber"
+                        type="text"
+                        value={form.companyHouseNumber || ""}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="companyPostalCode" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {t("postalCode") || "Postal Code"}
+                      </label>
+                      <input
+                        id="companyPostalCode"
+                        name="companyPostalCode"
+                        type="text"
+                        value={form.companyPostalCode || ""}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="companyCity" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {t("city") || "City"}
+                      </label>
+                      <input
+                        id="companyCity"
+                        name="companyCity"
+                        type="text"
+                        value={form.companyCity || ""}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="companyCountry" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {t("country") || "Country"}
+                      </label>
+                      <input
+                        id="companyCountry"
+                        name="companyCountry"
+                        type="text"
+                        value={form.companyCountry || ""}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="billingEmail" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t("billingEmail") || "Billing Email"}
+                    </label>
+                    <input
+                      id="billingEmail"
+                      name="billingEmail"
+                      type="email"
+                      value={form.billingEmail || ""}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="vatId" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {t("vatId") || "VAT ID"}
+                      </label>
+                      <input
+                        id="vatId"
+                        name="vatId"
+                        type="text"
+                        value={form.vatId || ""}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="taxNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {t("taxNumber") || "Tax Number"}
+                      </label>
+                      <input
+                        id="taxNumber"
+                        name="taxNumber"
+                        type="text"
+                        value={form.taxNumber || ""}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      />
+                    </div>
+                  </div>
+
+                  {form.role === "MANAGER" && (
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <h3 className="text-md font-semibold text-slate-900 dark:text-white mb-3">
+                        Rechnung E-Mail
+                      </h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label htmlFor="invoiceEmailSubject" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            E-Mail Betreff (mit Platzhalter)
+                          </label>
+                          <input
+                            id="invoiceEmailSubject"
+                            name="invoiceEmailSubject"
+                            type="text"
+                            value={form.invoiceEmailSubject || ""}
+                            onChange={handleChange}
+                            placeholder="{{companyName}} Rechnung Nr. {{invoiceNumber}}"
+                            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                          />
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {"Verfügbare Platzhalter: {{companyName}}, {{invoiceNumber}}, {{recipientName}}"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label htmlFor="invoiceEmailBody" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            E-Mail Inhalt
+                          </label>
+                          <textarea
+                            id="invoiceEmailBody"
+                            name="invoiceEmailBody"
+                            value={form.invoiceEmailBody || ""}
+                            onChange={(event) => {
+                              const { name, value } = event.target
+                              setForm((previous) => (previous ? { ...previous, [name]: value } : null))
+                            }}
+                            placeholder={"Guten Tag {{recipientName}},\n\nanbei erhalten Sie die Rechnung Nr. {{invoiceNumber}} als PDF im Anhang.\n\nMit freundlichen Grüßen\n{{companyName}}"}
+                            rows={7}
+                            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                          />
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {"Verfügbare Platzhalter: {{companyName}}, {{invoiceNumber}}, {{recipientName}}"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {form.role === "CONTRACTOR" && (
+              <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                  {t("subcontractors") || "Auftragnehmer"}
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                  {t("selectSubcontractorsHint") || "Wähle die Auftragnehmer, die dir zur Transport-Erstellung zur Verfügung stehen."}
+                </p>
+
+                <div className="mb-4 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    {t("askSubcontractorForCode") || "Bitte den Auftragnehmer um seinen Workspace-Code oder Einladungslink bitten."}
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      value={partnerWorkspaceCode}
+                      onChange={(event) => setPartnerWorkspaceCode(event.target.value)}
+                      placeholder="WS-XXXXXX"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddPartnerByCode}
+                      disabled={partnerAddLoading}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium"
+                    >
+                      {partnerAddLoading ? t("saving") : (t("addSubcontractor") || "Auftragnehmer hinzufügen")}
+                    </button>
+                  </div>
+                  {partnerMessage && (
+                    <p className={`mt-2 text-xs ${partnerMessageType === "error" ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      {partnerMessage}
+                    </p>
+                  )}
+                </div>
+
+                {partnerManagers.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">{t("none")}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {partnerManagers.map((manager) => (
+                      <div key={manager.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
+                        <label className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedPartnerManagerIds.includes(manager.id)}
+                            onChange={() => togglePartnerManager(manager.id)}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span>{manager.name}</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveContractorSubcontractor(manager.id)}
+                          disabled={partnerRemoveLoadingId === manager.id}
+                          className="text-xs font-medium text-red-600 hover:text-red-700 disabled:text-red-300"
+                        >
+                          {partnerRemoveLoadingId === manager.id ? (t("saving") || "Speichern...") : "Entfernen"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {form.role === "MANAGER" && (
+              <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                  {t("clients") || "Auftraggeber"}
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
+                  Füge Auftraggeber per Workspace-Code hinzu, bevor du Transporte erstellst.
+                </p>
+
+                <div className="mb-4 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    Bitte den Auftraggeber um seinen Workspace-Code.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      value={partnerWorkspaceCode}
+                      onChange={(event) => setPartnerWorkspaceCode(event.target.value)}
+                      placeholder="WS-XXXXXX"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddPartnerByCode}
+                      disabled={partnerAddLoading}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium"
+                    >
+                      {partnerAddLoading ? t("saving") : "Auftraggeber hinzufügen"}
+                    </button>
+                  </div>
+                  {partnerMessage && (
+                    <p className={`mt-2 text-xs ${partnerMessageType === "error" ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      {partnerMessage}
+                    </p>
+                  )}
+                </div>
+
+                {partnerManagers.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Noch keine Auftraggeber hinzugefügt.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {partnerManagers.map((contractor) => (
+                      <div key={contractor.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
+                        <label className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedPartnerContractorIds.includes(contractor.id)}
+                            onChange={() => togglePartnerContractor(contractor.id)}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span>{contractor.name}</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveManagerContractor(contractor.id)}
+                          disabled={partnerRemoveLoadingId === contractor.id}
+                          className="text-xs font-medium text-red-600 hover:text-red-700 disabled:text-red-300"
+                        >
+                          {partnerRemoveLoadingId === contractor.id ? (t("saving") || "Speichern...") : "Entfernen"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {form.role === "MANAGER" && (
+              <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                  Eigene Fahrer
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
+                  Diese Fahrer sind deinem Auftragnehmer-Workspace zugeordnet und stehen dir in der Transporterstellung zur Verfügung.
+                </p>
+
+                {workspaceDrivers.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Noch keine Fahrer im Workspace registriert.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {workspaceDrivers.map((driver) => (
+                      <div key={driver.id} className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
+                        <p className="font-medium">{driver.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{driver.email}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Bank Information (for MANAGER only) */}
+            {form.role === "MANAGER" && (
+              <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                  {t("bankInformation") || "Bank Information"}
+                </h2>
+
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="bankName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t("bankName") || "Bank Name"}
+                    </label>
+                    <input
+                      id="bankName"
+                      name="bankName"
+                      type="text"
+                      value={form.bankName || ""}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="bankAccountHolder" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t("accountHolder") || "Account Holder"}
+                    </label>
+                    <input
+                      id="bankAccountHolder"
+                      name="bankAccountHolder"
+                      type="text"
+                      value={form.bankAccountHolder || ""}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="iban" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {t("iban") || "IBAN"}
+                      </label>
+                      <input
+                        id="iban"
+                        name="iban"
+                        type="text"
+                        value={form.iban || ""}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="bic" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {t("bic") || "BIC"}
+                      </label>
+                      <input
+                        id="bic"
+                        name="bic"
+                        type="text"
+                        value={form.bic || ""}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Password Change */}
+            <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+              <button
+                type="button"
+                onClick={() => setShowPasswordChange(!showPasswordChange)}
+                className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+              >
+                {showPasswordChange ? "✕ " : "+ "}
+                {t("changePassword") || "Change Password"}
+              </button>
+
+              {showPasswordChange && (
+                <div className="space-y-4 mt-4">
+                  <div>
+                    <label htmlFor="currentPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t("currentPassword") || "Current Password"}
+                    </label>
+                    <input
+                      id="currentPassword"
+                      name="currentPassword"
+                      type="password"
+                      value={passwordForm.currentPassword}
+                      onChange={handlePasswordChange}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t("newPassword") || "New Password"}
+                    </label>
+                    <input
+                      id="newPassword"
+                      name="newPassword"
+                      type="password"
+                      value={passwordForm.newPassword}
+                      onChange={handlePasswordChange}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t("confirmPassword") || "Confirm Password"}
+                    </label>
+                    <input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type="password"
+                      value={passwordForm.confirmPassword}
+                      onChange={handlePasswordChange}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+              <h2 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">
+                {t("deleteAccount") || "Delete Account"}
+              </h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                {t("deleteAccountWarning") || "Warning: This action cannot be undone."}
+              </p>
+              <div className="space-y-3">
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(event) => setDeletePassword(event.target.value)}
+                  placeholder={t("currentPassword") || "Current Password"}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition"
+                />
+                <button
+                  type="button"
+                  onClick={handleDeleteAccount}
+                  disabled={deleteLoading}
+                  className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white transition font-medium disabled:cursor-not-allowed"
+                >
+                  {deleteLoading ? t("saving") || "Deleting..." : t("deleteAccountButton") || "Delete Account"}
+                </button>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="px-6 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600 transition font-medium"
+              >
+                {t("cancel") || "Cancel"}
+              </button>
+              <button
+                type="submit"
+                disabled={saveLoading}
+                className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white transition font-medium disabled:cursor-not-allowed"
+              >
+                {saveLoading ? t("saving") || "Saving..." : t("save") || "Save Changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}

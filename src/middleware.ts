@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH || "").trim()
+const BASE_PATH: string = ""
 
 function stripBasePath(pathname: string) {
   if (!BASE_PATH) return pathname
@@ -21,7 +21,7 @@ function hasSessionCookie(request: NextRequest) {
   return possibleSessionCookies.some((cookieName) => request.cookies.has(cookieName))
 }
 
-export default function proxy(request: NextRequest) {
+export default function middleware(request: NextRequest) {
   const pathname = stripBasePath(request.nextUrl.pathname)
   const isLoggedIn = hasSessionCookie(request)
   const isAuthRoute = pathname === "/login" || pathname === "/register"

@@ -50,6 +50,7 @@ function createPrismaClient() {
 	const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl()
 
 	if (runtimeDatabaseUrl) {
+		console.log(`[Prisma] Using datasource URL: ${runtimeDatabaseUrl}`)
 		return new PrismaClient({
 			datasources: {
 				db: {
@@ -59,8 +60,27 @@ function createPrismaClient() {
 		})
 	}
 
+	console.log("[Prisma] Using default datasource URL from environment")
 	return new PrismaClient()
 }
 
-export const prisma = globalForPrisma.prisma || createPrismaClient()
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
+function getPrismaClient() {
+	if (globalForPrisma.prisma) {
+		return globalForPrisma.prisma
+	}
+
+	const client = createPrismaClient()
+
+	if (process.env.NODE_ENV !== "production") {
+		globalForPrisma.prisma = client
+	}
+
+	return client
+}
+
+export const prisma = new Proxy({} as PrismaClient, {
+	get(_target, prop, receiver) {
+		const client = getPrismaClient() as unknown as Record<PropertyKey, unknown>
+		return Reflect.get(client, prop, receiver)
+	},
+})

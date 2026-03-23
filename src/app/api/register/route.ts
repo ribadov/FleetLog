@@ -4,6 +4,8 @@ import bcrypt from "bcryptjs"
 import { Prisma } from "@prisma/client"
 import { resolveLocale } from "@/lib/i18n"
 
+export const runtime = "nodejs"
+
 const RESERVED_ADMIN_EMAIL = "info@karr-logistik.com"
 
 function normalizeCode(code: string) {

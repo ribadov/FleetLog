@@ -140,31 +140,33 @@ export async function POST(req: Request) {
       const workspaceCodeValue = await createUniqueWorkspaceCode()
       const workspaceName = companyName?.trim() || `${name}'s Workspace`
 
-      const result = await prisma.$transaction(async (tx) => {
-        const createdManager = await tx.user.create({
-          data: {
-            name,
-            email: normalizedEmail,
-            phoneNumber: normalizedPhoneNumber,
-            preferredLanguage: normalizedLanguage,
-            password: hashedPassword,
-            role,
-            companyName,
-            companyStreet,
-            companyHouseNumber,
-            companyPostalCode,
-            companyCity,
-            companyCountry,
-            vatId,
-            taxNumber,
-            bankName,
-            bankAccountHolder,
-            iban,
-            bic,
-          },
-        })
+      const createdManager = await prisma.user.create({
+        data: {
+          name,
+          email: normalizedEmail,
+          phoneNumber: normalizedPhoneNumber,
+          preferredLanguage: normalizedLanguage,
+          password: hashedPassword,
+          role,
+          companyName,
+          companyStreet,
+          companyHouseNumber,
+          companyPostalCode,
+          companyCity,
+          companyCountry,
+          vatId,
+          taxNumber,
+          bankName,
+          bankAccountHolder,
+          iban,
+          bic,
+        },
+      })
 
-        const workspace = await tx.workspace.create({
+      let createdWorkspaceId: string | null = null
+
+      try {
+        const workspace = await prisma.workspace.create({
           data: {
             name: workspaceName,
             code: workspaceCodeValue,
@@ -172,21 +174,28 @@ export async function POST(req: Request) {
           },
         })
 
-        await tx.user.update({
+        createdWorkspaceId = workspace.id
+
+        await prisma.user.update({
           where: { id: createdManager.id },
           data: { workspaceId: workspace.id },
         })
 
-        return { workspaceCode: workspace.code }
-      })
+        return NextResponse.json(
+          {
+            message: "Manager created successfully",
+            workspaceCode: workspace.code,
+          },
+          { status: 201 }
+        )
+      } catch (managerSetupError) {
+        if (createdWorkspaceId) {
+          await prisma.workspace.delete({ where: { id: createdWorkspaceId } }).catch(() => null)
+        }
 
-      return NextResponse.json(
-        {
-          message: "Manager created successfully",
-          workspaceCode: result.workspaceCode,
-        },
-        { status: 201 }
-      )
+        await prisma.user.delete({ where: { id: createdManager.id } }).catch(() => null)
+        throw managerSetupError
+      }
     }
 
     let workspaceId: string | null = null

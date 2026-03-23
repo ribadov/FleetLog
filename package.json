@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "db:prepare": "node scripts/ensure-sqlite-db.mjs",
     "prisma:generate": "prisma generate",
-    "predev": "npm run prisma:generate",
+  "predev": "npm run prisma:generate",
     "dev": "next dev",
-    "prebuild": "npm run prisma:generate",
+    "prebuild": "npm run db:prepare && npm run prisma:generate",
     "build": "next build",
-    "prestart": "npm run prisma:generate",
+    "prestart": "npm run db:prepare && npm run prisma:generate",
     "start": "next start",
     "admin:set-password": "node scripts/set-admin-password.mjs",
     "lint": "eslint"

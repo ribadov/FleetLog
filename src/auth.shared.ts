@@ -9,6 +9,7 @@ function stripBasePath(pathname: string) {
 }
 
 const authSharedConfig: NextAuthConfig = {
+  basePath: "/api/auth",
   trustHost: true,
   providers: [],
   pages: {

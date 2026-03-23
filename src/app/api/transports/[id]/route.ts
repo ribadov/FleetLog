@@ -18,8 +18,12 @@ export async function GET(_req: Request, { params }: Params) {
   const { isAdmin, workspaceId } = getTenantContext(session.user)
   const transport = await prisma.transport.findUnique({
     where: { id },
-    include: { driver: true, contractor: true, seller: true, legs: { orderBy: { sequence: "asc" } } },
+    include: { driver: true, contractor: true, seller: true },
   })
+
+  // Fetch legs separately
+  const legs = await prisma.transportLeg.findMany({ where: { transportId: id }, orderBy: { sequence: "asc" } })
+  const transportWithLegs = transport ? { ...transport, legs } : null
   if (!transport) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
@@ -42,10 +46,10 @@ export async function GET(_req: Request, { params }: Params) {
   }
 
   if (session.user.role === "DRIVER") {
-    return NextResponse.json({ ...transport, price: null })
+    return NextResponse.json({ ...(transportWithLegs ?? transport), price: null })
   }
 
-  return NextResponse.json(transport)
+  return NextResponse.json(transportWithLegs ?? transport)
 }
 
 export async function PUT(req: Request, { params }: Params) {
@@ -64,6 +68,10 @@ export async function PUT(req: Request, { params }: Params) {
   const transport = await prisma.transport.findUnique({ where: { id } })
   if (!transport) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  if (transport.invoiceId) {
+    return NextResponse.json({ error: "Cannot edit an invoiced transport" }, { status: 400 })
   }
 
   if (!isAdmin) {
@@ -106,7 +114,10 @@ export async function PUT(req: Request, { params }: Params) {
 
     const canEditPrice = session.user.role === "MANAGER" || session.user.role === "CONTRACTOR"
 
-    if (containerNumber === undefined && orderNumber === undefined && !transport.orderNumber) {
+    const hasContainerNumberInput = containerNumber !== undefined
+    const hasLegacyContainerInput = containerNumber === undefined && orderNumber !== undefined
+
+    if (!hasContainerNumberInput && !hasLegacyContainerInput && !transport.orderNumber) {
       return NextResponse.json({ error: "Container number is required" }, { status: 400 })
     }
 
@@ -141,6 +152,17 @@ export async function PUT(req: Request, { params }: Params) {
     }
 
     let nextSellerId = sellerId !== undefined ? sellerId || null : transport.sellerId
+    if (session.user.role === "MANAGER") {
+      nextSellerId = session.user.id
+    }
+
+    if (session.user.role === "CONTRACTOR" && !nextSellerId) {
+      return NextResponse.json(
+        { error: "Subcontractor is required" },
+        { status: 400 }
+      )
+    }
+
     if (nextSellerId) {
       const seller = await prisma.user.findUnique({
         where: { id: nextSellerId },
@@ -163,17 +185,6 @@ export async function PUT(req: Request, { params }: Params) {
           )
         }
       }
-    }
-
-    if (session.user.role === "MANAGER" && nextSellerId === session.user.id) {
-      nextSellerId = session.user.id
-    }
-
-    if (session.user.role === "CONTRACTOR" && !nextSellerId) {
-      return NextResponse.json(
-        { error: "Subcontractor is required" },
-        { status: 400 }
-      )
     }
 
     let nextDriverId = driverId || transport.driverId
@@ -201,6 +212,7 @@ export async function PUT(req: Request, { params }: Params) {
       toPlace: string
       waitingFrom: string | null
       waitingTo: string | null
+      isIMO: boolean
       basePrice: number
       waitingMinutes: number
       waitingSurcharge: number
@@ -226,6 +238,7 @@ export async function PUT(req: Request, { params }: Params) {
         const basePrice = canEditPrice && Number.isFinite(parsedBasePrice) && parsedBasePrice > 0 ? parsedBasePrice : 0
         const waitingFromValue = typeof leg?.waitingFrom === "string" && leg.waitingFrom.trim() ? leg.waitingFrom.trim() : null
         const waitingToValue = typeof leg?.waitingTo === "string" && leg.waitingTo.trim() ? leg.waitingTo.trim() : null
+        const legIsIMO = Boolean(leg?.isIMO)
         const totals = calculateLegTotal(basePrice, waitingFromValue, waitingToValue)
 
         preparedLegs.push({
@@ -234,6 +247,7 @@ export async function PUT(req: Request, { params }: Params) {
           toPlace: legTo,
           waitingFrom: waitingFromValue,
           waitingTo: waitingToValue,
+          isIMO: legIsIMO,
           basePrice,
           waitingMinutes: totals.waitingMinutes,
           waitingSurcharge: totals.waitingSurcharge,
@@ -248,6 +262,8 @@ export async function PUT(req: Request, { params }: Params) {
       waitingFrom !== undefined ||
       waitingTo !== undefined ||
       price !== undefined
+
+    const nextIsIMO = isIMO !== undefined ? Boolean(isIMO) : transport.isIMO
 
     if (!preparedLegs && hasSingleRouteUpdate) {
       const singleFrom = typeof fromPlace === "string" && fromPlace.trim() ? fromPlace.trim() : transport.fromPlace
@@ -265,6 +281,7 @@ export async function PUT(req: Request, { params }: Params) {
           toPlace: singleTo,
           waitingFrom: waitingFromValue,
           waitingTo: waitingToValue,
+          isIMO: nextIsIMO,
           basePrice,
           waitingMinutes: totals.waitingMinutes,
           waitingSurcharge: totals.waitingSurcharge,
@@ -281,16 +298,14 @@ export async function PUT(req: Request, { params }: Params) {
       ...(session.user.role !== "DRIVER" && driverId && { driverId: nextDriverId }),
     }
 
-    if (orderNumber !== undefined) {
-      const normalizedContainerNumber = typeof orderNumber === "string" ? orderNumber.trim() : ""
+    if (hasContainerNumberInput) {
+      const normalizedContainerNumber = typeof containerNumber === "string" ? containerNumber.trim() : ""
       if (!normalizedContainerNumber) {
         return NextResponse.json({ error: "Container number is required" }, { status: 400 })
       }
       updateData.orderNumber = normalizedContainerNumber
-    }
-
-    if (containerNumber !== undefined) {
-      const normalizedContainerNumber = typeof containerNumber === "string" ? containerNumber.trim() : ""
+    } else if (hasLegacyContainerInput) {
+      const normalizedContainerNumber = typeof orderNumber === "string" ? orderNumber.trim() : ""
       if (!normalizedContainerNumber) {
         return NextResponse.json({ error: "Container number is required" }, { status: 400 })
       }
@@ -302,11 +317,10 @@ export async function PUT(req: Request, { params }: Params) {
       updateData.jobNumber = normalizedJobNumber || null
     }
 
-    const nextIsIMO = isIMO !== undefined ? Boolean(isIMO) : transport.isIMO
-
     if (preparedLegs) {
       const firstLeg = preparedLegs[0]
       const lastLeg = preparedLegs[preparedLegs.length - 1]
+      const transportIsIMO = preparedLegs.some((leg) => leg.isIMO)
 
       updateData.fromPlace = firstLeg.fromPlace
       updateData.toPlace = lastLeg.toPlace
@@ -316,8 +330,9 @@ export async function PUT(req: Request, { params }: Params) {
       updateData.waitingMinutes = preparedLegs.reduce((sum, leg) => sum + leg.waitingMinutes, 0)
       updateData.waitingSurcharge = preparedLegs.reduce((sum, leg) => sum + leg.waitingSurcharge, 0)
       const legsTotal = preparedLegs.reduce((sum, leg) => sum + leg.totalPrice, 0)
-      const imoSurcharge = calculateImoSurcharge(nextIsIMO)
+      const imoSurcharge = preparedLegs.reduce((sum, leg) => sum + calculateImoSurcharge(leg.isIMO), 0)
       updateData.imoSurcharge = imoSurcharge
+      updateData.isIMO = transportIsIMO
       updateData.price = legsTotal + imoSurcharge
     } else if (isIMO !== undefined) {
       const imoSurcharge = calculateImoSurcharge(nextIsIMO)
@@ -338,11 +353,11 @@ export async function PUT(req: Request, { params }: Params) {
         await tx.transportLeg.deleteMany({ where: { transportId: id } })
       }
 
-      const updatedTransport = await tx.transport.update({
-        where: { id },
-        data: updateData,
-        include: { driver: true, contractor: true, seller: true, legs: { orderBy: { sequence: "asc" } } },
-      })
+        const updatedTransport = await tx.transport.update({
+          where: { id },
+          data: updateData,
+          include: { driver: true, contractor: true, seller: true },
+        })
 
       if (preparedLegs) {
         for (const leg of preparedLegs) {
@@ -354,6 +369,7 @@ export async function PUT(req: Request, { params }: Params) {
               toPlace: leg.toPlace,
               waitingFrom: leg.waitingFrom,
               waitingTo: leg.waitingTo,
+              isIMO: leg.isIMO,
               basePrice: leg.basePrice,
               waitingMinutes: leg.waitingMinutes,
               waitingSurcharge: leg.waitingSurcharge,
@@ -362,13 +378,13 @@ export async function PUT(req: Request, { params }: Params) {
           })
         }
 
-        return tx.transport.findUniqueOrThrow({
-          where: { id },
-          include: { driver: true, contractor: true, seller: true, legs: { orderBy: { sequence: "asc" } } },
-        })
+        const refreshed = await tx.transport.findUniqueOrThrow({ where: { id }, include: { driver: true, contractor: true, seller: true } })
+        const refreshedLegs = await tx.transportLeg.findMany({ where: { transportId: id }, orderBy: { sequence: "asc" } })
+        return { ...refreshed, legs: refreshedLegs }
       }
 
-      return updatedTransport
+      const fetchedLegs = await tx.transportLeg.findMany({ where: { transportId: id }, orderBy: { sequence: "asc" } })
+      return { ...updatedTransport, legs: fetchedLegs }
     })
 
     if (preparedLegs && transport.workspaceId) {
@@ -414,6 +430,10 @@ export async function DELETE(_req: Request, { params }: Params) {
   const transport = await prisma.transport.findUnique({ where: { id } })
   if (!transport) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  if (transport.invoiceId) {
+    return NextResponse.json({ error: "Cannot delete an invoiced transport" }, { status: 400 })
   }
 
   if (!isAdmin && transport.workspaceId !== workspaceId) {

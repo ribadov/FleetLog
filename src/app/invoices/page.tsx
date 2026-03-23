@@ -11,7 +11,7 @@ export default async function InvoicesPage() {
   const session = await auth();
   if (!session) redirect("/login");
 
-  if (session.user.role !== "CONTRACTOR" && session.user.role !== "MANAGER" && session.user.role !== "ADMIN") {
+  if (session.user.role !== "MANAGER" && session.user.role !== "ADMIN") {
     redirect("/dashboard");
   }
 
@@ -20,14 +20,12 @@ export default async function InvoicesPage() {
 
   const { isAdmin, workspaceId } = getTenantContext(session.user);
 
-  if (!isAdmin && session.user.role !== "CONTRACTOR" && !workspaceId) {
+  if (!isAdmin && !workspaceId) {
     redirect("/dashboard");
   }
 
   const where =
-    session.user.role === "CONTRACTOR"
-      ? { contractorId: session.user.id, sentAt: { not: null } }
-      : isAdmin
+    isAdmin
         ? {}
         : { workspaceId };
 
@@ -58,7 +56,7 @@ export default async function InvoicesPage() {
   const contractors =
     contractorIds.length > 0
       ? await prisma.user.findMany({
-          where: { id: { in: contractorIds }, workspaceId },
+          where: { id: { in: contractorIds } },
           select: { id: true, name: true, email: true },
         })
       : [];

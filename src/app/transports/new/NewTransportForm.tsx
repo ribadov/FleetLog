@@ -4,13 +4,14 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getTranslator, readClientLocale, type Locale } from "@/lib/i18n";
 
-type User = { id: string; name: string; role: string };
+type User = { id: string; name: string; role: string; workspaceId: string | null };
 type LegForm = {
   fromPlace: string;
   toPlace: string;
   waitingFrom: string;
   waitingTo: string;
   price: string;
+  isIMO: boolean;
 };
 
 interface Props {
@@ -18,7 +19,6 @@ interface Props {
   places: string[];
   currentUserId: string;
   currentUserRole: string;
-  needsWorkspaceCode: boolean;
   allowedManagerIds: string[];
 }
 
@@ -27,7 +27,6 @@ const makeInitialForm = (userId: string, role: string) => ({
   containerNumber: "",
   orderNumber: "",
   containerSize: "SIZE_20",
-  isIMO: false,
   driverId: role === "DRIVER" ? userId : "",
   contractorId: role === "CONTRACTOR" ? userId : "",
   sellerId: "",
@@ -40,11 +39,12 @@ const makeInitialForm = (userId: string, role: string) => ({
       waitingFrom: "",
       waitingTo: "",
       price: "",
-    } satisfies LegForm,
+      isIMO: false,
+    } as LegForm,
   ],
 });
 
-export default function NewTransportForm({ users, places, currentUserId, currentUserRole, needsWorkspaceCode, allowedManagerIds }: Props) {
+export default function NewTransportForm({ users, places, currentUserId, currentUserRole, allowedManagerIds }: Props) {
   const router = useRouter();
   const [locale] = useState<Locale>(() => readClientLocale());
   const t = useMemo(() => getTranslator(locale), [locale]);
@@ -60,6 +60,31 @@ export default function NewTransportForm({ users, places, currentUserId, current
     ? managers.filter((manager) => allowedManagerIds.includes(manager.id))
     : managers;
 
+  const showContractorField = currentUserRole === "MANAGER";
+  const showSellerField = currentUserRole === "CONTRACTOR";
+  const selectableContractors = showContractorField ? contractors : contractors;
+  const selectedContractorId = showContractorField
+    ? (selectableContractors.some((entry) => entry.id === form.contractorId)
+      ? form.contractorId
+      : (selectableContractors[0]?.id || ""))
+    : form.contractorId;
+  const currentUserWorkspaceId = users.find((entry) => entry.id === currentUserId)?.workspaceId ?? null;
+  const availableDrivers = currentUserRole === "MANAGER"
+    ? drivers.filter((driver) => currentUserWorkspaceId ? driver.workspaceId === currentUserWorkspaceId : true)
+    : currentUserRole === "CONTRACTOR"
+      ? drivers.filter((driver) => {
+          if (!form.sellerId) return false;
+          const seller = availableSubcontractors.find((subcontractor) => subcontractor.id === form.sellerId);
+          return Boolean(seller?.workspaceId) && driver.workspaceId === seller?.workspaceId;
+        })
+      : drivers;
+  const selectedDriverId = currentUserRole === "MANAGER"
+    ? (availableDrivers.some((entry) => entry.id === form.driverId) ? form.driverId : "")
+    : form.driverId;
+  const submitDisabled = loading
+    || (showContractorField && !selectedContractorId)
+    || ((currentUserRole === "MANAGER" || currentUserRole === "CONTRACTOR") && !selectedDriverId);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
@@ -67,7 +92,15 @@ export default function NewTransportForm({ users, places, currentUserId, current
     if (type === "checkbox") {
       setForm((prev) => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
     } else {
-      setForm((prev) => ({ ...prev, [name]: value }));
+      setForm((prev) => {
+        if (name === "contractorId" && currentUserRole === "MANAGER") {
+          return { ...prev, contractorId: value, driverId: "" };
+        }
+        if (name === "sellerId" && currentUserRole === "CONTRACTOR") {
+          return { ...prev, sellerId: value, driverId: "" };
+        }
+        return { ...prev, [name]: value };
+      });
     }
   };
 
@@ -79,10 +112,21 @@ export default function NewTransportForm({ users, places, currentUserId, current
     });
   };
 
+  const handleLegImoChange = (index: number, checked: boolean) => {
+    setForm((previous) => {
+      const nextLegs = [...previous.legs];
+      nextLegs[index] = { ...nextLegs[index], isIMO: checked };
+      return { ...previous, legs: nextLegs };
+    });
+  };
+
   const addLeg = () => {
     setForm((previous) => ({
       ...previous,
-      legs: [...previous.legs, { fromPlace: "", toPlace: "", waitingFrom: "", waitingTo: "", price: "" }],
+      legs: [
+        ...previous.legs,
+        { fromPlace: "", toPlace: "", waitingFrom: "", waitingTo: "", price: "", isIMO: false } as LegForm,
+      ],
     }));
   };
 
@@ -104,7 +148,8 @@ export default function NewTransportForm({ users, places, currentUserId, current
     const body = {
       ...form,
       containerNumber: form.containerNumber,
-      contractorId: form.contractorId || null,
+      contractorId: selectedContractorId || null,
+      driverId: selectedDriverId,
       sellerId: form.sellerId || null,
       notes: form.notes || null,
       workspaceCode: form.workspaceCode || null,
@@ -114,6 +159,7 @@ export default function NewTransportForm({ users, places, currentUserId, current
         waitingFrom: leg.waitingFrom || null,
         waitingTo: leg.waitingTo || null,
         price: leg.price ? parseFloat(leg.price) : 0,
+        isIMO: leg.isIMO,
       })),
     };
 
@@ -168,21 +214,6 @@ export default function NewTransportForm({ users, places, currentUserId, current
 
       <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-xl shadow p-6 space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {needsWorkspaceCode && (
-            <div>
-              <label htmlFor="workspaceCode" className={labelClass}>{t("workspaceCode")} *</label>
-              <input
-                id="workspaceCode"
-                name="workspaceCode"
-                type="text"
-                required
-                value={form.workspaceCode}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="WS-XXXXXX"
-              />
-            </div>
-          )}
           <div>
             <label htmlFor="date" className={labelClass}>{t("date")} *</label>
             <input id="date" name="date" type="date" required value={form.date} onChange={handleChange} className={inputClass} />
@@ -271,6 +302,19 @@ export default function NewTransportForm({ users, places, currentUserId, current
                 </div>
               </div>
 
+              <div className="flex items-center gap-3">
+                <input
+                  id={`leg-${index}-isIMO`}
+                  type="checkbox"
+                  checked={leg.isIMO}
+                  onChange={(event) => handleLegImoChange(index, event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor={`leg-${index}-isIMO`} className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  ADR / IMO für diese Tour
+                </label>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className={labelClass}>{t("waiting")} {t("from")}</label>
@@ -318,65 +362,79 @@ export default function NewTransportForm({ users, places, currentUserId, current
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <input
-            id="isIMO"
-            name="isIMO"
-            type="checkbox"
-            checked={form.isIMO}
-            onChange={handleChange}
-            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-          />
-          <label htmlFor="isIMO" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t("imo")} / ADR cargo
-          </label>
-        </div>
-
         <div>
           <label htmlFor="driverId" className={labelClass}>{t("driver")} *</label>
           <select
             id="driverId"
             name="driverId"
             required
-            value={form.driverId}
+            value={selectedDriverId}
             onChange={handleChange}
-            disabled={currentUserRole === "DRIVER"}
-            className={inputClass + (currentUserRole === "DRIVER" ? " opacity-70 cursor-not-allowed" : "")}
+            disabled={currentUserRole === "DRIVER" || (currentUserRole === "CONTRACTOR" && !form.sellerId)}
+            className={inputClass + ((currentUserRole === "DRIVER" || (currentUserRole === "CONTRACTOR" && !form.sellerId)) ? " opacity-70 cursor-not-allowed" : "")}
           >
             <option value="">{t("selectDriver")}</option>
-            {drivers.map((d) => (
+            {availableDrivers.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
+          {currentUserRole === "MANAGER" && availableDrivers.length === 0 && (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              Für deinen Workspace sind aktuell keine Fahrer verfügbar.
+            </p>
+          )}
+          {currentUserRole === "CONTRACTOR" && !form.sellerId && (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              Bitte zuerst einen Auftragnehmer auswählen, dann werden passende Fahrer angezeigt.
+            </p>
+          )}
+          {currentUserRole === "CONTRACTOR" && form.sellerId && availableDrivers.length === 0 && (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              Für den ausgewählten Auftragnehmer sind aktuell keine Fahrer verfügbar.
+            </p>
+          )}
         </div>
 
-        <div>
-          <label htmlFor="contractorId" className={labelClass}>{t("contractor")}{currentUserRole === "MANAGER" ? " *" : ""}</label>
-          <select
-            id="contractorId"
-            name="contractorId"
-            value={form.contractorId}
-            onChange={handleChange}
-            className={inputClass}
-            required={currentUserRole === "MANAGER"}
-            disabled={currentUserRole === "CONTRACTOR"}
-          >
-            {currentUserRole !== "MANAGER" && <option value="">{t("none")}</option>}
-            {contractors.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
+        {showContractorField && (
+          <div>
+            <label htmlFor="contractorId" className={labelClass}>{t("contractor")} *</label>
+            <select
+              id="contractorId"
+              name="contractorId"
+              value={selectedContractorId}
+              onChange={handleChange}
+              className={inputClass}
+              required
+            >
+              {selectableContractors.length === 0 && <option value="">{t("none")}</option>}
+              {selectableContractors.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {selectableContractors.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                Du hast noch keine Auftragnehmer. Bitte füge zuerst im Profil per Workspace-Code Auftragnehmer hinzu.
+              </p>
+            )}
+          </div>
+        )}
 
-        <div>
-          <label htmlFor="sellerId" className={labelClass}>{t("subcontractor")}{currentUserRole === "CONTRACTOR" ? " *" : ""}</label>
-          <select id="sellerId" name="sellerId" value={form.sellerId} onChange={handleChange} className={inputClass} required={currentUserRole === "CONTRACTOR"}>
-            <option value="">{t("none")}</option>
-            {availableSubcontractors.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-        </div>
+        {showSellerField && (
+          <div>
+              <label htmlFor="sellerId" className={labelClass}>{t("subcontractor")} *</label>
+              <select id="sellerId" name="sellerId" value={form.sellerId} onChange={handleChange} className={inputClass} required={currentUserRole === "CONTRACTOR"}>
+                <option value="">{t("none")}</option>
+                {availableSubcontractors.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+              {currentUserRole === "CONTRACTOR" && availableSubcontractors.length === 0 && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Du hast noch keine Auftragnehmer. Bitte füge zuerst im Profil per Workspace-Code Auftragnehmer hinzu.
+                </p>
+              )}
+          </div>
+        )}
 
         <div>
           <label htmlFor="notes" className={labelClass}>{t("notes")}</label>
@@ -405,7 +463,7 @@ export default function NewTransportForm({ users, places, currentUserId, current
           </button>
           <button
             type="submit"
-            disabled={loading}
+            disabled={submitDisabled}
             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-semibold rounded-lg transition-colors"
           >
             {loading ? t("creating") : t("createTransport")}

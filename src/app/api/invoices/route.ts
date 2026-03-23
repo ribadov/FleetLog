@@ -26,20 +26,16 @@ export async function GET() {
 
   const { isAdmin, workspaceId } = getTenantContext(session.user);
 
-  if (session.user.role !== "CONTRACTOR" && session.user.role !== "MANAGER") {
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  if (session.user.role !== "MANAGER" && session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!isAdmin && session.user.role !== "CONTRACTOR" && !workspaceId) {
+  if (!isAdmin && !workspaceId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const where =
-    session.user.role === "CONTRACTOR"
-      ? { contractorId: session.user.id, sentAt: { not: null } }
-      : isAdmin
+    isAdmin
         ? {}
         : { workspaceId };
 

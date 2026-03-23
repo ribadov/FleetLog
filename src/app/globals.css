@@ -38,12 +38,22 @@ body {
 
   .invoice-document {
     max-width: none !important;
+    width: calc(100% - 1pt) !important;
+    margin-left: 0 !important;
+    margin-right: auto !important;
     padding: 0 !important;
   }
 
   .print-card {
     box-shadow: none !important;
     border: 1px solid #e5e7eb !important;
-    break-inside: avoid;
+  }
+
+  .invoice-print-detail {
+    display: block !important;
+  }
+
+  .invoice-print-detail-line {
+    display: block !important;
   }
 }

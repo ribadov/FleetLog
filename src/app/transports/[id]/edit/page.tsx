@@ -18,10 +18,21 @@ export default async function EditTransportPage({ params }: Props) {
 
   const transport = await prisma.transport.findUnique({
     where: { id },
-    include: { driver: true, contractor: true, seller: true, legs: { orderBy: { sequence: "asc" } } },
+    include: { driver: true, contractor: true, seller: true },
+  });
+
+  // Fetch legs separately to avoid depending on a generated Prisma client
+  // that may not expose the relation under `legs` in all environments.
+  const legs = await prisma.transportLeg.findMany({
+    where: { transportId: id },
+    orderBy: { sequence: "asc" },
   });
 
   if (!transport) notFound();
+
+  if (transport.invoiceId) {
+    redirect("/transports");
+  }
 
   if (!isAdmin) {
     if (session.user.role === "CONTRACTOR") {
@@ -74,6 +85,11 @@ export default async function EditTransportPage({ params }: Props) {
     date: transport.date.toISOString(),
     createdAt: transport.createdAt.toISOString(),
     updatedAt: transport.updatedAt.toISOString(),
+    legs: legs.map((l) => ({
+      ...l,
+      createdAt: l.createdAt.toISOString(),
+      updatedAt: l.updatedAt.toISOString(),
+    })),
   };
 
   return (

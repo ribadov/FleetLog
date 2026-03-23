@@ -22,6 +22,14 @@ export default async function RootLayout({
   const user = session?.user;
   const locale = await getLocaleFromRequest();
   const t = getTranslator(locale);
+  const roleLabel = user
+    ? {
+        DRIVER: t("driver"),
+        CONTRACTOR: t("contractor"),
+        MANAGER: t("manager"),
+        ADMIN: t("admin"),
+      }[user.role] ?? user.role
+    : "";
 
   return (
     <html lang="en" className="h-full antialiased">
@@ -43,7 +51,7 @@ export default async function RootLayout({
                         {t("transports")}
                       </Link>
                     )}
-                    {(user.role === "CONTRACTOR" || user.role === "MANAGER") && (
+                    {(user.role === "MANAGER" || user.role === "ADMIN") && (
                       <Link href="/invoices" className="hover:text-blue-200 transition-colors">
                         {t("invoices")}
                       </Link>
@@ -63,7 +71,7 @@ export default async function RootLayout({
                 <div className="flex items-center gap-4 text-sm">
                   <LanguageSelector currentLocale={locale} label={t("language")} />
                   <span className="hidden sm:block text-blue-200">
-                    {user.name} &middot; <span className="text-blue-300">{user.role}</span>
+                    {user.name} &middot; <span className="text-blue-300">{roleLabel}</span>
                   </span>
                   <Link href="/profile" className="hidden sm:block bg-blue-600 dark:bg-blue-800 hover:bg-blue-500 dark:hover:bg-blue-700 px-3 py-1.5 rounded text-white text-sm font-medium transition-colors">
                     {t("profile")}

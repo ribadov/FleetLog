@@ -30,6 +30,8 @@ model User {
   phoneNumber    String?
   preferredLanguage String?
   billingEmail   String?
+  invoiceEmailSubject String?   // Standard-Betreff für Rechnungs-E-Mails
+  invoiceEmailBody    String?   // Standard-Text für Rechnungs-E-Mails
   password       String
   role           Role        @default(DRIVER)
   companyName    String?
@@ -44,6 +46,7 @@ model User {
   bankAccountHolder String?
   iban           String?
   bic            String?
+  logoPath       String?
   workspaceId    String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -170,6 +173,7 @@ model TransportLeg {
   toPlace          String
   waitingFrom      String?
   waitingTo        String?
+  isIMO            Boolean    @default(false)
   basePrice        Float      @default(0)
   waitingMinutes   Int        @default(0)
   waitingSurcharge Float      @default(0)

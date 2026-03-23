@@ -50,3 +50,19 @@ export async function replaceAssignedManagers(contractorId: string, managerIds: 
     }
   })
 }
+
+export async function replaceAssignedContractors(managerId: string, contractorIds: string[]): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      DELETE FROM "ContractorPartnerAssignment"
+      WHERE "managerId" = ${managerId}
+    `
+
+    for (const contractorId of contractorIds) {
+      await tx.$executeRaw`
+        INSERT OR IGNORE INTO "ContractorPartnerAssignment" ("id", "contractorId", "managerId", "createdAt")
+        VALUES (lower(hex(randomblob(12))), ${contractorId}, ${managerId}, CURRENT_TIMESTAMP)
+      `
+    }
+  })
+}

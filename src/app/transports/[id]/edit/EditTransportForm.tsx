@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getTranslator, readClientLocale, type Locale } from "@/lib/i18n";
 
@@ -11,7 +11,12 @@ type LegForm = {
   waitingFrom: string;
   waitingTo: string;
   price: string;
+  isIMO: boolean;
 };
+
+type PartnerContractorPayload = {
+  contractors?: Array<{ id: string; name: string }>
+}
 
 type Transport = {
   id: string;
@@ -40,6 +45,7 @@ type Transport = {
     toPlace: string;
     waitingFrom: string | null;
     waitingTo: string | null;
+      isIMO: boolean;
     basePrice: number;
     totalPrice: number;
   }>;
@@ -63,7 +69,6 @@ export default function EditTransportForm({ transport, users, places, role, allo
     containerNumber: transport.orderNumber ?? "",
     orderNumber: transport.jobNumber ?? "",
     containerSize: transport.containerSize,
-    isIMO: transport.isIMO,
     driverId: transport.driverId,
     contractorId: transport.contractorId ?? "",
     sellerId: transport.sellerId ?? "",
@@ -79,6 +84,7 @@ export default function EditTransportForm({ transport, users, places, role, allo
               waitingFrom: leg.waitingFrom ?? "",
               waitingTo: leg.waitingTo ?? "",
               price: leg.basePrice.toString(),
+              isIMO: leg.isIMO,
             }))
         : [
             {
@@ -87,6 +93,7 @@ export default function EditTransportForm({ transport, users, places, role, allo
               waitingFrom: transport.waitingFrom ?? "",
               waitingTo: transport.waitingTo ?? "",
               price: transport.basePrice?.toString() ?? transport.price?.toString() ?? "",
+              isIMO: transport.isIMO,
             },
           ],
   });
@@ -94,6 +101,7 @@ export default function EditTransportForm({ transport, users, places, role, allo
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [freightLetterFile, setFreightLetterFile] = useState<File | null>(null);
+  const [fallbackContractors, setFallbackContractors] = useState<User[]>([]);
 
   const drivers = users.filter((user) => user.role === "DRIVER");
   const contractors = users.filter((user) => user.role === "CONTRACTOR");
@@ -101,6 +109,47 @@ export default function EditTransportForm({ transport, users, places, role, allo
   const availableSubcontractors = role === "CONTRACTOR"
     ? managers.filter((manager) => allowedManagerIds.includes(manager.id))
     : managers;
+
+  const showContractorField = role === "MANAGER";
+  const showSellerField = role === "CONTRACTOR";
+  const selectableContractors = showContractorField
+    ? (contractors.length > 0 ? contractors : fallbackContractors)
+    : contractors;
+  const selectedContractorId = showContractorField
+    ? (form.contractorId || selectableContractors[0]?.id || "")
+    : form.contractorId;
+
+  useEffect(() => {
+    if (!showContractorField || contractors.length > 0) {
+      return;
+    }
+
+    let active = true;
+
+    const loadFallbackContractors = async () => {
+      try {
+        const response = await fetch("/api/contractor-partners");
+        if (!response.ok) return;
+        const payload = await response.json() as PartnerContractorPayload;
+        if (!active) return;
+        const normalized = (payload.contractors ?? []).map((entry) => ({
+          id: entry.id,
+          name: entry.name,
+          role: "CONTRACTOR",
+        }));
+        setFallbackContractors(normalized);
+      } catch {
+        if (!active) return;
+        setFallbackContractors([]);
+      }
+    };
+
+    void loadFallbackContractors();
+
+    return () => {
+      active = false;
+    };
+  }, [showContractorField, contractors.length]);
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -121,10 +170,18 @@ export default function EditTransportForm({ transport, users, places, role, allo
     });
   };
 
+  const handleLegImoChange = (index: number, checked: boolean) => {
+    setForm((previous) => {
+      const nextLegs = [...previous.legs];
+      nextLegs[index] = { ...nextLegs[index], isIMO: checked };
+      return { ...previous, legs: nextLegs };
+    });
+  };
+
   const addLeg = () => {
     setForm((previous) => ({
       ...previous,
-      legs: [...previous.legs, { fromPlace: "", toPlace: "", waitingFrom: "", waitingTo: "", price: "" }],
+      legs: [...previous.legs, { fromPlace: "", toPlace: "", waitingFrom: "", waitingTo: "", price: "", isIMO: false }],
     }));
   };
 
@@ -144,9 +201,12 @@ export default function EditTransportForm({ transport, users, places, role, allo
     setLoading(true);
 
     const body = {
-      ...form,
+      date: form.date,
       containerNumber: form.containerNumber,
-      contractorId: form.contractorId || null,
+      jobNumber: form.orderNumber,
+      containerSize: form.containerSize,
+      driverId: form.driverId,
+      contractorId: selectedContractorId || null,
       sellerId: form.sellerId || null,
       notes: form.notes || null,
       legs: form.legs.map((leg) => ({
@@ -155,6 +215,7 @@ export default function EditTransportForm({ transport, users, places, role, allo
         waitingFrom: leg.waitingFrom || null,
         waitingTo: leg.waitingTo || null,
         price: leg.price ? parseFloat(leg.price) : 0,
+        isIMO: leg.isIMO,
       })),
     };
 
@@ -295,6 +356,19 @@ export default function EditTransportForm({ transport, users, places, role, allo
                 </div>
               </div>
 
+              <div className="flex items-center gap-3">
+                <input
+                  id={`leg-${index}-isIMO`}
+                  type="checkbox"
+                  checked={leg.isIMO}
+                  onChange={(event) => handleLegImoChange(index, event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor={`leg-${index}-isIMO`} className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  ADR / IMO für diese Tour
+                </label>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className={labelClass}>{t("waiting")} {t("from")}</label>
@@ -342,20 +416,6 @@ export default function EditTransportForm({ transport, users, places, role, allo
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <input
-            id="isIMO"
-            name="isIMO"
-            type="checkbox"
-            checked={form.isIMO}
-            onChange={handleChange}
-            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-          />
-          <label htmlFor="isIMO" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t("imo")} / ADR cargo
-          </label>
-        </div>
-
         <div>
           <label htmlFor="driverId" className={labelClass}>{t("driver")} *</label>
           <select
@@ -374,25 +434,34 @@ export default function EditTransportForm({ transport, users, places, role, allo
           </select>
         </div>
 
-        <div>
-          <label htmlFor="contractorId" className={labelClass}>{t("contractor")}{role === "MANAGER" ? " *" : ""}</label>
-          <select id="contractorId" name="contractorId" value={form.contractorId} onChange={handleChange} className={inputClass} required={role === "MANAGER"}>
-            {role !== "MANAGER" && <option value="">{t("none")}</option>}
-            {contractors.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
+        {showContractorField && (
+          <div>
+            <label htmlFor="contractorId" className={labelClass}>{t("contractor")} *</label>
+            <select id="contractorId" name="contractorId" value={selectedContractorId} onChange={handleChange} className={inputClass} required>
+              {selectableContractors.length === 0 && <option value="">{t("none")}</option>}
+              {selectableContractors.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {selectableContractors.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                Keine zugewiesenen Auftraggeber vorhanden.
+              </p>
+            )}
+          </div>
+        )}
 
-        <div>
-          <label htmlFor="sellerId" className={labelClass}>{t("subcontractor")}{role === "CONTRACTOR" ? " *" : ""}</label>
-          <select id="sellerId" name="sellerId" value={form.sellerId} onChange={handleChange} className={inputClass} required={role === "CONTRACTOR"}>
-            <option value="">{t("none")}</option>
-            {availableSubcontractors.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-        </div>
+        {showSellerField && (
+          <div>
+              <label htmlFor="sellerId" className={labelClass}>{t("subcontractor")} *</label>
+              <select id="sellerId" name="sellerId" value={form.sellerId} onChange={handleChange} className={inputClass} required={role === "CONTRACTOR"}>
+                <option value="">{t("none")}</option>
+                {availableSubcontractors.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+          </div>
+        )}
 
         <div>
           <label htmlFor="notes" className={labelClass}>{t("notes")}</label>

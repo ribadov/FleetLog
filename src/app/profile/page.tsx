@@ -27,6 +27,8 @@ interface ProfileData {
   bankAccountHolder: string | null
   iban: string | null
   bic: string | null
+  invoiceEmailSubject: string | null
+  invoiceEmailBody: string | null
 }
 
 type PartnerManager = {
@@ -48,8 +50,10 @@ export default function ProfilePage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [partnerManagers, setPartnerManagers] = useState<PartnerManager[]>([])
   const [selectedPartnerManagerIds, setSelectedPartnerManagerIds] = useState<string[]>([])
+  const [selectedPartnerContractorIds, setSelectedPartnerContractorIds] = useState<string[]>([])
   const [partnerWorkspaceCode, setPartnerWorkspaceCode] = useState("")
   const [partnerAddLoading, setPartnerAddLoading] = useState(false)
+  const [partnerRemoveLoadingId, setPartnerRemoveLoadingId] = useState<string | null>(null)
   const [partnerMessage, setPartnerMessage] = useState("")
   const [partnerMessageType, setPartnerMessageType] = useState<"success" | "error" | null>(null)
   const [form, setForm] = useState<ProfileData | null>(null)
@@ -76,6 +80,22 @@ export default function ProfilePage() {
     setSelectedPartnerManagerIds(partnerData.selectedManagerIds)
   }
 
+  const loadManagerPartners = async () => {
+    const partnerResponse = await fetch("/api/contractor-partners")
+    if (!partnerResponse.ok) {
+      const payload = await partnerResponse.json().catch(() => ({ error: "Failed to load subcontractors" }))
+      throw new Error(payload.error || "Failed to load subcontractors")
+    }
+
+    const partnerData = await partnerResponse.json() as {
+      contractors: PartnerManager[]
+      selectedContractorIds: string[]
+    }
+
+    setPartnerManagers(partnerData.contractors)
+    setSelectedPartnerContractorIds(partnerData.selectedContractorIds)
+  }
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login")
@@ -100,11 +120,7 @@ export default function ProfilePage() {
           if (data.role === "CONTRACTOR") {
             await loadContractorPartners()
           } else if (data.role === "MANAGER") {
-            const partnerResponse = await fetch("/api/contractor-partners")
-            if (partnerResponse.ok) {
-              const payload = await partnerResponse.json() as { contractors?: PartnerManager[] }
-              setPartnerManagers(payload.contractors ?? [])
-            }
+            await loadManagerPartners()
           }
 
           setError("")
@@ -158,6 +174,8 @@ export default function ProfilePage() {
       payload.billingEmail = form.billingEmail
       payload.vatId = form.vatId
       payload.taxNumber = form.taxNumber
+      payload.invoiceEmailSubject = form.invoiceEmailSubject
+      payload.invoiceEmailBody = form.invoiceEmailBody
     }
 
     if (form.role === "MANAGER") {
@@ -206,10 +224,17 @@ export default function ProfilePage() {
             await loadContractorPartners()
           }
         } else if (form.role === "MANAGER") {
-          const partnerResponse = await fetch("/api/contractor-partners")
-          if (partnerResponse.ok) {
-            const payload = await partnerResponse.json() as { contractors?: PartnerManager[] }
-            setPartnerManagers(payload.contractors ?? [])
+          const partnerRes = await fetch("/api/contractor-partners", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contractorIds: selectedPartnerContractorIds }),
+          })
+
+          if (!partnerRes.ok) {
+            const partnerData = await partnerRes.json()
+            partnerSaveError = partnerData.error || "Failed to update subcontractors"
+          } else {
+            await loadManagerPartners()
           }
         }
 
@@ -276,8 +301,18 @@ export default function ProfilePage() {
     )
   }
 
+  const togglePartnerContractor = (contractorId: string) => {
+    setSelectedPartnerContractorIds((previous) =>
+      previous.includes(contractorId)
+        ? previous.filter((entry) => entry !== contractorId)
+        : [...previous, contractorId]
+    )
+  }
+
   const handleAddPartnerByCode = async () => {
     const normalizedCode = partnerWorkspaceCode.trim().toUpperCase()
+    const isManagerRole = form?.role === "MANAGER"
+    const partnerLabel = isManagerRole ? "Auftraggeber" : "Auftragnehmer"
     if (!normalizedCode) {
       setPartnerMessage(t("workspaceCode") || "Workspace code")
       setPartnerMessageType("error")
@@ -299,21 +334,105 @@ export default function ProfilePage() {
 
       const payload = await response.json()
       if (!response.ok) {
-        setPartnerMessage(payload.error || (t("invalidSubcontractorCode") || "Ungültiger Auftragnehmer-Code"))
+        setPartnerMessage(payload.error || `Ungültiger ${partnerLabel}-Code`)
         setPartnerMessageType("error")
         return
       }
 
-      setSuccess(t("subcontractorAdded") || "Auftragnehmer hinzugefügt")
-      setPartnerMessage(t("subcontractorAdded") || "Auftragnehmer hinzugefügt")
+      setSuccess(`${partnerLabel} hinzugefügt`)
+      setPartnerMessage(`${partnerLabel} hinzugefügt`)
       setPartnerMessageType("success")
       setPartnerWorkspaceCode("")
-      await loadContractorPartners()
+      if (form?.role === "MANAGER") {
+        await loadManagerPartners()
+      } else {
+        await loadContractorPartners()
+      }
     } catch (requestError) {
-      setPartnerMessage(requestError instanceof Error ? requestError.message : (t("invalidSubcontractorCode") || "Ungültiger Auftragnehmer-Code"))
+      setPartnerMessage(requestError instanceof Error ? requestError.message : `Ungültiger ${partnerLabel}-Code`)
       setPartnerMessageType("error")
     } finally {
       setPartnerAddLoading(false)
+    }
+  }
+
+  const handleRemoveManagerContractor = async (contractorId: string) => {
+    if (form?.role !== "MANAGER") {
+      return
+    }
+
+    setError("")
+    setSuccess("")
+    setPartnerMessage("")
+    setPartnerMessageType(null)
+    setPartnerRemoveLoadingId(contractorId)
+
+    const nextIds = selectedPartnerContractorIds.filter((id) => id !== contractorId)
+
+    try {
+      const response = await fetch("/api/contractor-partners", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractorIds: nextIds }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setPartnerMessage((payload as { error?: string }).error || "Auftraggeber konnte nicht entfernt werden")
+        setPartnerMessageType("error")
+        return
+      }
+
+      setSelectedPartnerContractorIds(nextIds)
+      await loadManagerPartners()
+      setSuccess("Auftraggeber entfernt")
+      setPartnerMessage("Auftraggeber entfernt")
+      setPartnerMessageType("success")
+    } catch (requestError) {
+      setPartnerMessage(requestError instanceof Error ? requestError.message : "Auftraggeber konnte nicht entfernt werden")
+      setPartnerMessageType("error")
+    } finally {
+      setPartnerRemoveLoadingId(null)
+    }
+  }
+
+  const handleRemoveContractorSubcontractor = async (managerId: string) => {
+    if (form?.role !== "CONTRACTOR") {
+      return
+    }
+
+    setError("")
+    setSuccess("")
+    setPartnerMessage("")
+    setPartnerMessageType(null)
+    setPartnerRemoveLoadingId(managerId)
+
+    const nextIds = selectedPartnerManagerIds.filter((id) => id !== managerId)
+
+    try {
+      const response = await fetch("/api/contractor-partners", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ managerIds: nextIds }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setPartnerMessage((payload as { error?: string }).error || "Auftragnehmer konnte nicht entfernt werden")
+        setPartnerMessageType("error")
+        return
+      }
+
+      setSelectedPartnerManagerIds(nextIds)
+      await loadContractorPartners()
+      setSuccess("Auftragnehmer entfernt")
+      setPartnerMessage("Auftragnehmer entfernt")
+      setPartnerMessageType("success")
+    } catch (requestError) {
+      setPartnerMessage(requestError instanceof Error ? requestError.message : "Auftragnehmer konnte nicht entfernt werden")
+      setPartnerMessageType("error")
+    } finally {
+      setPartnerRemoveLoadingId(null)
     }
   }
 
@@ -563,6 +682,52 @@ export default function ProfilePage() {
                       />
                     </div>
                   </div>
+
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <h3 className="text-md font-semibold text-slate-900 dark:text-white mb-3">
+                      Rechnung E-Mail
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="invoiceEmailSubject" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          E-Mail Betreff (mit Platzhalter)
+                        </label>
+                        <input
+                          id="invoiceEmailSubject"
+                          name="invoiceEmailSubject"
+                          type="text"
+                          value={form.invoiceEmailSubject || ""}
+                          onChange={handleChange}
+                          placeholder="{{companyName}} Rechnung Nr. {{invoiceNumber}}"
+                          className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                        />
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          {"Verfügbare Platzhalter: {{companyName}}, {{invoiceNumber}}, {{recipientName}}"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <label htmlFor="invoiceEmailBody" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          E-Mail Inhalt
+                        </label>
+                        <textarea
+                          id="invoiceEmailBody"
+                          name="invoiceEmailBody"
+                          value={form.invoiceEmailBody || ""}
+                          onChange={(event) => {
+                            const { name, value } = event.target
+                            setForm((previous) => (previous ? { ...previous, [name]: value } : null))
+                          }}
+                          placeholder={"Guten Tag {{recipientName}},\n\nanbei erhalten Sie die Rechnung Nr. {{invoiceNumber}} als PDF im Anhang.\n\nMit freundlichen Grüßen\n{{companyName}}"}
+                          rows={7}
+                          className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                        />
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          {"Verfügbare Platzhalter: {{companyName}}, {{invoiceNumber}}, {{recipientName}}"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -608,15 +773,25 @@ export default function ProfilePage() {
                 ) : (
                   <div className="space-y-2">
                     {partnerManagers.map((manager) => (
-                      <label key={manager.id} className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300">
-                        <input
-                          type="checkbox"
-                          checked={selectedPartnerManagerIds.includes(manager.id)}
-                          onChange={() => togglePartnerManager(manager.id)}
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span>{manager.name}</span>
-                      </label>
+                      <div key={manager.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
+                        <label className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedPartnerManagerIds.includes(manager.id)}
+                            onChange={() => togglePartnerManager(manager.id)}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span>{manager.name}</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveContractorSubcontractor(manager.id)}
+                          disabled={partnerRemoveLoadingId === manager.id}
+                          className="text-xs font-medium text-red-600 hover:text-red-700 disabled:text-red-300"
+                        >
+                          {partnerRemoveLoadingId === manager.id ? (t("saving") || "Speichern...") : "Entfernen"}
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -629,15 +804,59 @@ export default function ProfilePage() {
                   {t("clients") || "Auftraggeber"}
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-                  {t("clientsAssignedHint") || "Diese Auftraggeber haben dich als Auftragnehmer hinzugefügt."}
+                  Füge Auftraggeber per Workspace-Code hinzu, bevor du Transporte erstellst.
                 </p>
+
+                <div className="mb-4 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    Bitte den Auftraggeber um seinen Workspace-Code.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      value={partnerWorkspaceCode}
+                      onChange={(event) => setPartnerWorkspaceCode(event.target.value)}
+                      placeholder="WS-XXXXXX"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddPartnerByCode}
+                      disabled={partnerAddLoading}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium"
+                    >
+                      {partnerAddLoading ? t("saving") : "Auftraggeber hinzufügen"}
+                    </button>
+                  </div>
+                  {partnerMessage && (
+                    <p className={`mt-2 text-xs ${partnerMessageType === "error" ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      {partnerMessage}
+                    </p>
+                  )}
+                </div>
+
                 {partnerManagers.length === 0 ? (
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{t("none")}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Noch keine Auftraggeber hinzugefügt.</p>
                 ) : (
                   <div className="space-y-2">
-                    {partnerManagers.map((client) => (
-                      <div key={client.id} className="text-sm text-slate-700 dark:text-slate-300">
-                        {client.name}
+                    {partnerManagers.map((contractor) => (
+                      <div key={contractor.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
+                        <label className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedPartnerContractorIds.includes(contractor.id)}
+                            onChange={() => togglePartnerContractor(contractor.id)}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span>{contractor.name}</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveManagerContractor(contractor.id)}
+                          disabled={partnerRemoveLoadingId === contractor.id}
+                          className="text-xs font-medium text-red-600 hover:text-red-700 disabled:text-red-300"
+                        >
+                          {partnerRemoveLoadingId === contractor.id ? (t("saving") || "Speichern...") : "Entfernen"}
+                        </button>
                       </div>
                     ))}
                   </div>

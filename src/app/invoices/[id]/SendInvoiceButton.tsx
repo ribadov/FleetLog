@@ -19,19 +19,29 @@ export default function SendInvoiceButton({ invoiceId, locale }: Props) {
     setError("");
     setLoading(true);
 
-    const response = await fetch(`/api/invoices/${invoiceId}/send`, {
-      method: "POST",
-    });
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}/send`, {
+        method: "POST",
+      });
 
-    const data = await response.json();
-    setLoading(false);
+      let data: { error?: string } | null = null;
+      try {
+        data = await response.json() as { error?: string };
+      } catch {
+        data = null;
+      }
 
-    if (!response.ok) {
-      setError(data.error || "Rechnung konnte nicht gesendet werden");
-      return;
+      if (!response.ok) {
+        setError(data?.error || "Rechnung konnte nicht gesendet werden");
+        return;
+      }
+
+      router.refresh();
+    } catch {
+      setError("Rechnung konnte nicht gesendet werden");
+    } finally {
+      setLoading(false);
     }
-
-    router.refresh();
   };
 
   return (

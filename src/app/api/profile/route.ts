@@ -35,6 +35,8 @@ export async function GET() {
         bankAccountHolder: true,
         iban: true,
         bic: true,
+        invoiceEmailSubject: true,
+        invoiceEmailBody: true,
       },
     })
 
@@ -76,6 +78,8 @@ export async function PUT(req: Request) {
       bic,
       currentPassword,
       newPassword,
+      invoiceEmailSubject,
+      invoiceEmailBody,
     } = await req.json() as Record<string, string | null | undefined>
 
     const user = await prisma.user.findUnique({
@@ -85,7 +89,6 @@ export async function PUT(req: Request) {
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
-
     // Validate password change if provided
     if (newPassword) {
       if (!currentPassword) {
@@ -113,6 +116,13 @@ export async function PUT(req: Request) {
 
     // Build update data
     const updateData: Record<string, string | null> = {}
+
+    if (invoiceEmailSubject !== undefined) {
+      updateData.invoiceEmailSubject = invoiceEmailSubject?.trim() || null
+    }
+    if (invoiceEmailBody !== undefined) {
+      updateData.invoiceEmailBody = invoiceEmailBody?.trim() || null
+    }
     
     if (name !== undefined && name?.trim()) {
       updateData.name = name.trim()
@@ -200,6 +210,8 @@ export async function PUT(req: Request) {
         bankAccountHolder: true,
         iban: true,
         bic: true,
+        invoiceEmailSubject: true,
+        invoiceEmailBody: true,
       },
     })
 

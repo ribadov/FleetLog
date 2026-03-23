@@ -5,6 +5,16 @@ type PasswordResetMailParams = {
   resetUrl: string
 }
 
+type InvoiceMailParams = {
+  to: string
+  invoiceNumber: string
+  invoiceUrl: string
+  subject?: string
+  bodyText?: string
+  pdfBuffer?: Buffer
+  pdfFileName?: string
+}
+
 function getSmtpPort() {
   const rawPort = process.env.SMTP_PORT
   if (!rawPort) return 587
@@ -30,6 +40,15 @@ function createTransporter() {
       pass,
     },
   })
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
 }
 
 export async function sendPasswordResetEmail({ to, resetUrl }: PasswordResetMailParams) {
@@ -60,5 +79,60 @@ export async function sendPasswordResetEmail({ to, resetUrl }: PasswordResetMail
         <p>Der Link ist 1 Stunde gültig.</p>
       </div>
     `,
+  })
+}
+
+export async function sendInvoiceEmail({
+  to,
+  invoiceNumber,
+  invoiceUrl,
+  subject,
+  bodyText,
+  pdfBuffer,
+  pdfFileName,
+}: InvoiceMailParams) {
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER
+
+  if (!from) {
+    throw new Error("SMTP_FROM or SMTP_USER must be configured.")
+  }
+
+  const transporter = createTransporter()
+
+  const finalSubject = subject?.trim() || `FleetLog Rechnung ${invoiceNumber}`
+  const finalBody = bodyText?.trim() || `Eine neue Rechnung (${invoiceNumber}) wurde für dich erstellt.`
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: finalSubject,
+    text: `${finalBody}\n\nÖffne sie hier: ${invoiceUrl}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+        <h2>${escapeHtml(finalSubject)}</h2>
+        ${finalBody
+          .split("\n")
+          .filter((line) => line.trim().length > 0)
+          .map((line) => `<p>${escapeHtml(line)}</p>`)
+          .join("")}
+        <p>
+          <a href="${invoiceUrl}" style="display:inline-block;background:#2563eb;color:white;padding:10px 16px;border-radius:8px;text-decoration:none;">
+            Rechnung öffnen
+          </a>
+        </p>
+        <p>Oder öffne diesen Link direkt:</p>
+        <p><a href="${invoiceUrl}">${invoiceUrl}</a></p>
+        <p>Die Rechnung ist als PDF im Anhang enthalten.</p>
+      </div>
+    `,
+    attachments: pdfBuffer
+      ? [
+          {
+            filename: pdfFileName || `Rechnung-${invoiceNumber}.pdf`,
+            content: pdfBuffer,
+            contentType: "application/pdf",
+          },
+        ]
+      : [],
   })
 }

@@ -37,17 +37,31 @@ export async function GET(req: Request) {
 
   const transports = await prisma.transport.findMany({
     where,
-    include: { driver: true, contractor: true, seller: true, legs: { orderBy: { sequence: "asc" } } },
+    include: { driver: true, contractor: true, seller: true },
     orderBy: { date: "desc" },
   })
 
+  // Attach legs separately to avoid relying on a specific Prisma client include shape
+  const transportIds = transports.map((t) => t.id)
+  const legs = transportIds.length
+    ? await prisma.transportLeg.findMany({ where: { transportId: { in: transportIds } }, orderBy: { transportId: "asc", sequence: "asc" } })
+    : []
+
+  const legsByTransport: Record<string, (typeof legs)[number][]> = {}
+  for (const l of legs) {
+    legsByTransport[l.transportId] = legsByTransport[l.transportId] || []
+    legsByTransport[l.transportId].push(l)
+  }
+
+  const transportsWithLegs = transports.map((t) => ({ ...t, legs: legsByTransport[t.id] || [] }))
+
   if (session.user.role === "DRIVER") {
     return NextResponse.json(
-      transports.map((t) => ({ ...t, price: null }))
+      transportsWithLegs.map((t) => ({ ...t, price: null }))
     )
   }
 
-  return NextResponse.json(transports)
+  return NextResponse.json(transportsWithLegs)
 }
 
 export async function POST(req: Request) {
@@ -84,7 +98,6 @@ export async function POST(req: Request) {
       contractorId,
       sellerId,
       notes,
-      workspaceCode,
       legs,
     } = body
 
@@ -111,63 +124,44 @@ export async function POST(req: Request) {
 
     let targetWorkspaceId = workspaceId ?? null
 
-    if (session.user.role === "CONTRACTOR" && !targetWorkspaceId) {
-      const normalizedWorkspaceCode = typeof workspaceCode === "string" ? workspaceCode.trim().toUpperCase() : ""
-      if (!normalizedWorkspaceCode) {
-        return NextResponse.json(
-          { error: "Workspace code is required for this order" },
-          { status: 400 }
-        )
-      }
+    let resolvedSellerId: string | null = sellerId || null
 
-      const workspace = await prisma.workspace.findUnique({ where: { code: normalizedWorkspaceCode }, select: { id: true, managerId: true } })
-      if (!workspace) {
-        return NextResponse.json(
-          { error: "Invalid workspace code" },
-          { status: 400 }
-        )
-      }
-
-      targetWorkspaceId = workspace.id
+    if (session.user.role === "MANAGER") {
+      resolvedSellerId = session.user.id
     }
 
-    if (!targetWorkspaceId) {
-      return NextResponse.json({ error: "Workspace missing" }, { status: 403 })
-    }
-
-    const driver = await prisma.user.findUnique({
-      where: { id: driverId },
-      select: { id: true, role: true, workspaceId: true },
-    })
-
-    if (!driver || driver.role !== "DRIVER" || driver.workspaceId !== targetWorkspaceId) {
-      return NextResponse.json(
-        { error: "Invalid driver for selected workspace" },
-        { status: 400 }
-      )
-    }
-
-    if (session.user.role === "DRIVER" && driverId !== session.user.id) {
-      return NextResponse.json(
-        { error: "Drivers can only create transports for themselves" },
-        { status: 403 }
-      )
-    }
-
-    if (session.user.role === "CONTRACTOR" && !sellerId) {
+    if (session.user.role === "CONTRACTOR" && !resolvedSellerId) {
       return NextResponse.json(
         { error: "Subcontractor is required" },
         { status: 400 }
       )
     }
 
-    if (sellerId) {
+    let sellerWorkspaceId: string | null = null
+
+    if (resolvedSellerId) {
       const seller = await prisma.user.findUnique({
-        where: { id: sellerId },
+        where: { id: resolvedSellerId },
         select: { id: true, role: true, workspaceId: true },
       })
 
-      if (!seller || seller.role !== "MANAGER" || seller.workspaceId !== targetWorkspaceId) {
+      if (!seller || seller.role !== "MANAGER") {
+        return NextResponse.json(
+          { error: "Invalid seller" },
+          { status: 400 }
+        )
+      }
+
+      sellerWorkspaceId = seller.workspaceId
+
+      if (!sellerWorkspaceId) {
+        return NextResponse.json(
+          { error: "Selected seller has no workspace" },
+          { status: 400 }
+        )
+      }
+
+      if (session.user.role === "MANAGER" && sellerWorkspaceId !== targetWorkspaceId) {
         return NextResponse.json(
           { error: "Invalid seller for selected workspace" },
           { status: 400 }
@@ -175,7 +169,7 @@ export async function POST(req: Request) {
       }
 
       if (session.user.role === "CONTRACTOR") {
-        const assigned = await isManagerAssignedToContractor(session.user.id, sellerId)
+        const assigned = await isManagerAssignedToContractor(session.user.id, resolvedSellerId)
         if (!assigned) {
           return NextResponse.json(
             { error: "Selected subcontractor is not assigned to this client" },
@@ -183,6 +177,14 @@ export async function POST(req: Request) {
           )
         }
       }
+    }
+
+    if (session.user.role === "CONTRACTOR") {
+      targetWorkspaceId = sellerWorkspaceId
+    }
+
+    if (!targetWorkspaceId) {
+      return NextResponse.json({ error: "Workspace missing" }, { status: 403 })
     }
 
     let resolvedContractorId: string | null = contractorId || null
@@ -219,12 +221,38 @@ export async function POST(req: Request) {
       )
     }
 
+    const requiredDriverWorkspaceId = session.user.role === "MANAGER"
+      ? targetWorkspaceId
+      : session.user.role === "CONTRACTOR"
+        ? sellerWorkspaceId
+      : targetWorkspaceId
+
+    const driver = await prisma.user.findUnique({
+      where: { id: driverId },
+      select: { id: true, role: true, workspaceId: true },
+    })
+
+    if (!driver || driver.role !== "DRIVER" || driver.workspaceId !== requiredDriverWorkspaceId) {
+      return NextResponse.json(
+        { error: "Invalid driver for selected workspace" },
+        { status: 400 }
+      )
+    }
+
+    if (session.user.role === "DRIVER" && driverId !== session.user.id) {
+      return NextResponse.json(
+        { error: "Drivers can only create transports for themselves" },
+        { status: 403 }
+      )
+    }
+
     type LegPayload = {
       sequence: number
       fromPlace: string
       toPlace: string
       waitingFrom: string | null
       waitingTo: string | null
+      isIMO: boolean
       basePrice: number
       waitingMinutes: number
       waitingSurcharge: number
@@ -248,6 +276,7 @@ export async function POST(req: Request) {
 
         const parsedBasePrice = Number(leg?.price ?? 0)
         const basePrice = canSetPrices && Number.isFinite(parsedBasePrice) && parsedBasePrice > 0 ? parsedBasePrice : 0
+        const legIsIMO = Boolean(leg?.isIMO)
         const waitingFromValue = typeof leg?.waitingFrom === "string" && leg.waitingFrom.trim() ? leg.waitingFrom.trim() : null
         const waitingToValue = typeof leg?.waitingTo === "string" && leg.waitingTo.trim() ? leg.waitingTo.trim() : null
         const totals = calculateLegTotal(basePrice, waitingFromValue, waitingToValue)
@@ -258,6 +287,7 @@ export async function POST(req: Request) {
           toPlace: legTo,
           waitingFrom: waitingFromValue,
           waitingTo: waitingToValue,
+          isIMO: legIsIMO,
           basePrice,
           waitingMinutes: totals.waitingMinutes,
           waitingSurcharge: totals.waitingSurcharge,
@@ -286,6 +316,7 @@ export async function POST(req: Request) {
         toPlace: singleTo,
         waitingFrom: waitingFromValue,
         waitingTo: waitingToValue,
+        isIMO: Boolean(isIMO),
         basePrice,
         waitingMinutes: totals.waitingMinutes,
         waitingSurcharge: totals.waitingSurcharge,
@@ -299,7 +330,11 @@ export async function POST(req: Request) {
     const transportWaitingMinutes = preparedLegs.reduce((sum, leg) => sum + leg.waitingMinutes, 0)
     const transportWaitingSurcharge = preparedLegs.reduce((sum, leg) => sum + leg.waitingSurcharge, 0)
     const transportLegsTotalPrice = preparedLegs.reduce((sum, leg) => sum + leg.totalPrice, 0)
-    const transportImoSurcharge = calculateImoSurcharge(Boolean(isIMO))
+    const transportImoSurcharge = preparedLegs.reduce(
+      (sum, leg) => sum + calculateImoSurcharge(leg.isIMO),
+      0
+    )
+    const transportIsIMO = preparedLegs.some((leg) => leg.isIMO)
     const transportTotalPrice = transportLegsTotalPrice + transportImoSurcharge
 
     const transport = await prisma.transport.create({
@@ -311,7 +346,7 @@ export async function POST(req: Request) {
         fromPlace: firstLeg.fromPlace,
         toPlace: lastLeg.toPlace,
         containerSize,
-        isIMO: isIMO ?? false,
+        isIMO: transportIsIMO,
         waitingFrom: firstLeg.waitingFrom,
         waitingTo: lastLeg.waitingTo,
         freightLetterPath: null,
@@ -322,7 +357,7 @@ export async function POST(req: Request) {
         price: transportTotalPrice,
         driverId,
         contractorId: resolvedContractorId,
-        sellerId: sellerId || null,
+        sellerId: resolvedSellerId,
         notes: notes || null,
         legs: {
           create: preparedLegs.map((leg) => ({
@@ -331,6 +366,7 @@ export async function POST(req: Request) {
             toPlace: leg.toPlace,
             waitingFrom: leg.waitingFrom,
             waitingTo: leg.waitingTo,
+            isIMO: leg.isIMO,
             basePrice: leg.basePrice,
             waitingMinutes: leg.waitingMinutes,
             waitingSurcharge: leg.waitingSurcharge,
@@ -338,8 +374,12 @@ export async function POST(req: Request) {
           })),
         },
       },
-      include: { driver: true, contractor: true, seller: true, legs: { orderBy: { sequence: "asc" } } },
+      include: { driver: true, contractor: true, seller: true },
     })
+
+    // Fetch legs created above and attach them for the response
+    const createdLegs = await prisma.transportLeg.findMany({ where: { transportId: transport.id }, orderBy: { sequence: "asc" } })
+    const transportWithLegs = { ...transport, legs: createdLegs }
 
     await Promise.all(
       preparedLegs.flatMap((leg) => [
@@ -348,7 +388,7 @@ export async function POST(req: Request) {
       ])
     )
 
-    return NextResponse.json(transport, { status: 201 })
+    return NextResponse.json(transportWithLegs || transport, { status: 201 })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

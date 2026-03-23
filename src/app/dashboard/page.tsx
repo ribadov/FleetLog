@@ -5,6 +5,7 @@ import { getLocaleFromRequest } from "@/lib/i18n-server";
 import { getTranslator } from "@/lib/i18n";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import DashboardStatsPanel from "./DashboardStatsPanel";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -66,6 +67,55 @@ export default async function DashboardPage() {
     take: 5,
   });
 
+  const statsTransportsRaw =
+    user.role === "ADMIN"
+      ? await prisma.transport.findMany({
+          select: {
+            date: true,
+            price: true,
+            contractor: { select: { name: true } },
+            seller: { select: { name: true } },
+          },
+          orderBy: { date: "asc" },
+        })
+      : user.role === "MANAGER"
+        ? await prisma.transport.findMany({
+            where: { workspaceId },
+            select: {
+              date: true,
+              price: true,
+              contractor: { select: { name: true } },
+              seller: { select: { name: true } },
+            },
+            orderBy: { date: "asc" },
+          })
+        : user.role === "CONTRACTOR"
+          ? await prisma.transport.findMany({
+              where: { contractorId: user.id },
+              select: {
+                date: true,
+                price: true,
+                contractor: { select: { name: true } },
+                seller: { select: { name: true } },
+              },
+              orderBy: { date: "asc" },
+            })
+          : [];
+
+  const statsTransports = statsTransportsRaw.map((row) => ({
+    date: row.date.toISOString(),
+    price: row.price,
+    contractorName: row.contractor?.name ?? null,
+    sellerName: row.seller?.name ?? null,
+  }));
+
+  const roleLabel = {
+    DRIVER: t("driver"),
+    CONTRACTOR: t("contractor"),
+    MANAGER: t("manager"),
+    ADMIN: t("admin"),
+  }[user.role] ?? user.role;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="mb-8">
@@ -73,7 +123,7 @@ export default async function DashboardPage() {
           Welcome back, {user.name}
         </h1>
         <p className="mt-1 text-slate-500 dark:text-slate-400">
-          {t("role")}: <span className="font-medium text-blue-600 dark:text-blue-400">{user.role}</span>
+          {t("role")}: <span className="font-medium text-blue-600 dark:text-blue-400">{roleLabel}</span>
         </p>
         {user.role === "MANAGER" && workspaceCode && (
           <p className="mt-1 text-slate-500 dark:text-slate-400">
@@ -137,6 +187,14 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+
+      {(user.role === "MANAGER" || user.role === "CONTRACTOR" || user.role === "ADMIN") && (
+        <DashboardStatsPanel
+          role={user.role}
+          nowIso={new Date().toISOString()}
+          transports={statsTransports}
+        />
+      )}
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow">
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">

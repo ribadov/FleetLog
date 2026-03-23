@@ -1,7 +1,7 @@
 export const WAITING_FREE_MINUTES = 30
 export const WAITING_SURCHARGE_STEP_MINUTES = 30
 export const WAITING_SURCHARGE_STEP_EUR = 15
-export const IMO_SURCHARGE_EUR = 15
+export const IMO_SURCHARGE_EUR = 25
 
 type TimeValue = string | null | undefined
 

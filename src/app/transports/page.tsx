@@ -5,7 +5,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { getLocaleFromRequest } from "@/lib/i18n-server";
 import { getTranslator } from "@/lib/i18n";
 import Link from "next/link";
-import TransportsTable from "./TransportsTable";
+import TransportsTableClient from "./TransportsTableClient";
 
 export default async function TransportsPage() {
   const session = await auth();
@@ -56,7 +56,7 @@ export default async function TransportsPage() {
           </Link>
         </div>
       </div>
-      <TransportsTable
+      <TransportsTableClient
         transports={sanitized}
         role={role}
         userId={userId}

@@ -4,8 +4,7 @@ import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import type { NextAuthConfig } from "next-auth"
 import type { JWT } from "@auth/core/jwt"
-
-const BASE_PATH = "/fleetlog"
+import authSharedConfig from "@/auth.shared"
 
 declare module "next-auth" {
   interface Session {
@@ -31,6 +30,7 @@ type ExtendedJWT = JWT & {
 }
 
 const config: NextAuthConfig = {
+  ...authSharedConfig,
   providers: [
     Credentials({
       name: "credentials",
@@ -66,6 +66,7 @@ const config: NextAuthConfig = {
   ],
   session: { strategy: "jwt" },
   callbacks: {
+    ...authSharedConfig.callbacks,
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id as string
@@ -95,35 +96,6 @@ const config: NextAuthConfig = {
       }
       return session
     },
-    async authorized({ auth: session, request: { nextUrl } }) {
-      const isLoggedIn = !!session?.user
-      const pathname = nextUrl.pathname.startsWith(BASE_PATH)
-        ? nextUrl.pathname.slice(BASE_PATH.length) || "/"
-        : nextUrl.pathname
-      const isAuthRoute =
-        pathname === "/login" || pathname === "/register"
-      const isProtectedRoute =
-        pathname.startsWith("/dashboard") ||
-        pathname.startsWith("/transports") ||
-        pathname.startsWith("/invoices") ||
-        pathname.startsWith("/admin")
-
-      if (isAuthRoute) {
-        if (isLoggedIn) {
-          return Response.redirect(new URL(`${BASE_PATH}/dashboard`, nextUrl))
-        }
-        return true
-      }
-
-      if (isProtectedRoute) {
-        return isLoggedIn
-      }
-
-      return true
-    },
-  },
-  pages: {
-    signIn: "/login",
   },
 }
 

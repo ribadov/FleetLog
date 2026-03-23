@@ -15,6 +15,10 @@ if (fs.existsSync(envLocalPath)) {
   dotenv.config({ path: envLocalPath, override: true });
 }
 
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = "file:./prisma/dev.db";
+}
+
 export default defineConfig({
   earlyAccess: true,
   schema: "prisma/schema.prisma",

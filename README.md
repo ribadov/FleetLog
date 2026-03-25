@@ -95,7 +95,8 @@ Open [http://localhost:3000](http://localhost:3000) with your browser.
 Set the following environment variables in production:
 
 ```
-DATABASE_URL=file:./prisma/dev.db
+DATABASE_URL=libsql://<your-turso-db>.turso.io
+DATABASE_AUTH_TOKEN=<your-turso-auth-token>
 AUTH_SECRET=<random-secret>
 NEXTAUTH_SECRET=<optional-legacy-alias>
 NEXTAUTH_URL=https://www.karr-logistik.com/fleetlog

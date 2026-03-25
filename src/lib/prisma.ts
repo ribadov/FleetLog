@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client"
+import { PrismaLibSQL } from "@prisma/adapter-libsql"
 import fs from "node:fs"
 import path from "node:path"
 
@@ -47,19 +48,15 @@ function resolveRuntimeDatabaseUrl() {
 }
 
 function createPrismaClient() {
-	const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl()
+	const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl() || "file:./prisma/dev.db"
+	const authToken = process.env.DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN
 
-	if (runtimeDatabaseUrl) {
-		return new PrismaClient({
-			datasources: {
-				db: {
-					url: runtimeDatabaseUrl,
-				},
-			},
-		})
-	}
+	const adapter = new PrismaLibSQL({
+		url: runtimeDatabaseUrl,
+		authToken,
+	})
 
-	return new PrismaClient()
+	return new PrismaClient({ adapter })
 }
 
 const prismaClient = globalForPrisma.prisma || createPrismaClient()

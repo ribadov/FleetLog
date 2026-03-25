@@ -5,7 +5,7 @@
   "scripts": {
     "db:prepare": "node scripts/ensure-sqlite-db.mjs",
     "prisma:generate": "prisma generate",
-  "predev": "npm run prisma:generate",
+    "predev": "npm run prisma:generate",
     "dev": "next dev",
     "prebuild": "npm run db:prepare && npm run prisma:generate",
     "build": "next build",
@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
+    "@libsql/client": "^0.17.2",
+    "@prisma/adapter-libsql": "^6.12.0",
     "@prisma/client": "^6.12.0",
     "bcryptjs": "^3.0.3",
     "next": "16.2.1",

@@ -1,7 +1,29 @@
 import type { NextAuthConfig } from "next-auth"
 
 export const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH || "").trim()
-const AUTH_SECRET = (process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "").trim()
+
+function resolveAuthSecret() {
+  const env = process.env as Record<string, string | undefined>
+  const configuredSecret =
+    env.AUTH_SECRET ?? env.AUTHJS_SECRET ?? env.NEXTAUTH_SECRET ?? env.SECRET ?? ""
+
+  const trimmedConfiguredSecret = configuredSecret.trim()
+  if (trimmedConfiguredSecret) {
+    return trimmedConfiguredSecret
+  }
+
+  const fallbackSeed =
+    env.NEXTAUTH_URL ?? env.CF_PAGES_URL ?? env.VERCEL_URL ?? env.HOSTNAME ?? "fleetlog"
+
+  console.error(
+    "[Auth] Missing AUTH_SECRET/NEXTAUTH_SECRET. Using fallback secret. " +
+      "Set AUTH_SECRET in production environment variables."
+  )
+
+  return `unsafe-fallback-secret:${fallbackSeed}`
+}
+
+const AUTH_SECRET = resolveAuthSecret()
 
 function stripBasePath(pathname: string) {
   if (!BASE_PATH) return pathname
@@ -12,7 +34,7 @@ function stripBasePath(pathname: string) {
 const authSharedConfig: NextAuthConfig = {
   basePath: "/api/auth",
   trustHost: true,
-  secret: AUTH_SECRET || (process.env.NODE_ENV === "development" ? "dev-insecure-auth-secret" : undefined),
+  secret: AUTH_SECRET,
   providers: [],
   pages: {
     signIn: "/login",

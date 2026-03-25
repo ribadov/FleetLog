@@ -3,20 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "build": "next build",
     "db:prepare": "node scripts/ensure-sqlite-db.mjs",
     "prisma:generate": "prisma generate",
     "predev": "npm run prisma:generate",
     "dev": "next dev",
     "prebuild": "npm run db:prepare && npm run prisma:generate",
-    "build": "next build",
     "prestart": "npm run db:prepare && npm run prisma:generate",
     "start": "next start",
     "admin:set-password": "node scripts/set-admin-password.mjs",
-    "lint": "eslint"
+    "lint": "eslint",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
     "@libsql/client": "^0.17.2",
+    "@opennextjs/cloudflare": "^1.17.3",
     "@prisma/adapter-libsql": "^6.12.0",
     "@prisma/client": "^6.12.0",
     "bcryptjs": "^3.0.3",
@@ -43,6 +48,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.77.0"
   }
 }

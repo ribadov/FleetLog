@@ -1,5 +1,5 @@
-import fs from "node:fs"
-import { chromium } from "playwright-core"
+import { prisma } from "@/lib/prisma"
+import { buildInvoicePdfBuffer } from "@/lib/invoice-pdf"
 
 type BuildInvoicePrintPdfParams = {
   invoiceId: string
@@ -8,65 +8,75 @@ type BuildInvoicePrintPdfParams = {
   footerHtml?: string
 }
 
-function resolveBrowserExecutablePath() {
-  const fromEnv = process.env.CHROMIUM_PATH || process.env.PLAYWRIGHT_CHROMIUM_PATH
-  if (fromEnv && fs.existsSync(fromEnv)) {
-    return fromEnv
-  }
-
-  const candidates = [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium",
-  ]
-
-  return candidates.find((path) => fs.existsSync(path))
-}
-
 export async function buildInvoicePrintPdf({ invoiceId, appUrl, cookieHeader, footerHtml }: BuildInvoicePrintPdfParams) {
-  const executablePath = resolveBrowserExecutablePath()
-  if (!executablePath) {
-    throw new Error("No Chromium executable found. Please set CHROMIUM_PATH.")
-  }
+  void appUrl
+  void cookieHeader
+  void footerHtml
 
-  const browser = await chromium.launch({
-    executablePath,
-    headless: true,
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      contractor: true,
+      sentBy: true,
+      workspace: {
+        include: {
+          manager: true,
+        },
+      },
+      transports: {
+        orderBy: { date: "asc" },
+        select: {
+          date: true,
+          orderNumber: true,
+          jobNumber: true,
+          containerSize: true,
+          fromPlace: true,
+          toPlace: true,
+          notes: true,
+          isIMO: true,
+          price: true,
+        },
+      },
+    },
   })
 
-  try {
-    const context = await browser.newContext({
-      extraHTTPHeaders: cookieHeader ? { cookie: cookieHeader } : undefined,
-    })
-
-    const page = await context.newPage()
-    await page.goto(`${appUrl.replace(/\/$/, "")}/invoices/${invoiceId}`, {
-      waitUntil: "networkidle",
-    })
-
-    await page.emulateMedia({ media: "print" })
-
-    const pdf = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      preferCSSPageSize: true,
-      displayHeaderFooter: Boolean(footerHtml),
-      headerTemplate: "<span></span>",
-      footerTemplate: footerHtml || "<span></span>",
-      margin: {
-        top: "12mm",
-        right: "10mm",
-        bottom: footerHtml ? "26mm" : "12mm",
-        left: "10mm",
-      },
-    })
-
-    await context.close()
-    return Buffer.from(pdf)
-  } finally {
-    await browser.close()
+  if (!invoice) {
+    throw new Error("Invoice not found")
   }
+
+  const sender = invoice.workspace?.manager ?? invoice.sentBy ?? invoice.contractor
+
+  return buildInvoicePdfBuffer({
+    invoiceNumber: invoice.invoiceNumber,
+    createdAt: invoice.createdAt,
+    sentAt: invoice.sentAt,
+    recipientEmail: invoice.recipientEmail,
+    sender: {
+      name: sender.name,
+      companyName: sender.companyName,
+      companyStreet: sender.companyStreet,
+      companyHouseNumber: sender.companyHouseNumber,
+      companyPostalCode: sender.companyPostalCode,
+      companyCity: sender.companyCity,
+      companyCountry: sender.companyCountry,
+      vatId: sender.vatId,
+      taxNumber: sender.taxNumber,
+      bankName: sender.bankName,
+      bankAccountHolder: sender.bankAccountHolder,
+      iban: sender.iban,
+      bic: sender.bic,
+    },
+    recipient: {
+      name: invoice.contractor.name,
+      companyName: invoice.contractor.companyName,
+      companyStreet: invoice.contractor.companyStreet,
+      companyHouseNumber: invoice.contractor.companyHouseNumber,
+      companyPostalCode: invoice.contractor.companyPostalCode,
+      companyCity: invoice.contractor.companyCity,
+      companyCountry: invoice.contractor.companyCountry,
+      vatId: invoice.contractor.vatId,
+      taxNumber: invoice.contractor.taxNumber,
+    },
+    transports: invoice.transports,
+  })
 }

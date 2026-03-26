@@ -3,6 +3,7 @@ import "./globals.css";
 import { auth } from "@/auth";
 import { signOut } from "@/auth";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import Providers from "./providers";
 import LanguageSelector from "@/components/LanguageSelector";
 import { getLocaleFromRequest } from "@/lib/i18n-server";
@@ -79,7 +80,8 @@ export default async function RootLayout({
                   <form
                     action={async () => {
                       "use server";
-                      await signOut({ redirectTo: "/login" });
+                      await signOut({ redirect: false });
+                      redirect("/login");
                     }}
                   >
                     <button

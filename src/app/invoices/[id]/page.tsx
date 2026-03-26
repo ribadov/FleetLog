@@ -15,6 +15,23 @@ import { PrintPageNumbers } from "./PrintPageNumbers";
 
 type Params = { params: Promise<{ id: string }> };
 
+async function withTimeout<T>(promise: Promise<T>, fallback: T, label: string, timeoutMs = 5000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race<T>([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    console.error(`[Invoices] Query failed (${label})`, error);
+    return fallback;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("de-DE").format(value);
 }
@@ -42,30 +59,9 @@ export default async function InvoiceDetailPage({ params }: Params) {
   const { id } = await params;
 
   // Unterstützung sowohl für Datenbank-ID als auch für sichtbare Rechnungsnummer
-  let invoice = await prisma.invoice.findUnique({
-    where: { id },
-    include: {
-      contractor: true,
-      sentBy: true,
-      workspace: {
-        include: {
-          manager: true,
-        },
-      },
-      transports: {
-        orderBy: { date: "asc" },
-        include: {
-          legs: {
-            orderBy: { sequence: "asc" },
-          },
-        },
-      },
-    },
-  });
-
-  if (!invoice) {
-    invoice = await prisma.invoice.findUnique({
-      where: { invoiceNumber: id },
+  let invoice = await withTimeout(
+    prisma.invoice.findUnique({
+      where: { id },
       include: {
         contractor: true,
         sentBy: true,
@@ -74,16 +70,29 @@ export default async function InvoiceDetailPage({ params }: Params) {
             manager: true,
           },
         },
-        transports: {
-          orderBy: { date: "asc" },
-          include: {
-            legs: {
-              orderBy: { sequence: "asc" },
+      },
+    }),
+    null,
+    "invoice-by-id"
+  );
+
+  if (!invoice) {
+    invoice = await withTimeout(
+      prisma.invoice.findUnique({
+        where: { invoiceNumber: id },
+        include: {
+          contractor: true,
+          sentBy: true,
+          workspace: {
+            include: {
+              manager: true,
             },
           },
         },
-      },
-    });
+      }),
+      null,
+      "invoice-by-number"
+    );
   }
 
   if (!invoice) {
@@ -104,8 +113,22 @@ export default async function InvoiceDetailPage({ params }: Params) {
     redirect("/invoices");
   }
 
+  const transports = await withTimeout(
+    prisma.transport.findMany({
+      where: { invoiceId: invoice.id },
+      orderBy: { date: "asc" },
+      include: {
+        legs: {
+          orderBy: { sequence: "asc" },
+        },
+      },
+    }),
+    [],
+    "invoice-transports"
+  );
+
   const taxRate = 0.19;
-  const netTotal = invoice.transports.reduce((sum, transport) => sum + transport.price, 0);
+  const netTotal = transports.reduce((sum, transport) => sum + transport.price, 0);
   const taxTotal = netTotal * taxRate;
   const grossTotal = netTotal + taxTotal;
   const dueDate = invoice.sentAt
@@ -266,7 +289,7 @@ export default async function InvoiceDetailPage({ params }: Params) {
               </tr>
             </thead>
             <tbody>
-              {invoice.transports.map((transport) => {
+              {transports.map((transport) => {
                 const hasMultiStops = (transport.legs ?? []).length > 1;
 
                 // Render legs if multistop, otherwise just the main transport row

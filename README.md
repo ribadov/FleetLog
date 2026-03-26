@@ -101,3 +101,10 @@ AUTH_SECRET=<random-secret>
 NEXTAUTH_SECRET=<optional-legacy-alias>
 NEXTAUTH_URL=https://www.karr-logistik.com/fleetlog
 ```
+
+Optional for external PDF rendering service (recommended for production-like invoice layout without increasing Worker size):
+
+```
+PDF_RENDERER_URL=https://<your-pdf-service>/render-invoice
+PDF_RENDERER_TOKEN=<optional-bearer-token>
+```

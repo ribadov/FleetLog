@@ -8,10 +8,52 @@ type BuildInvoicePrintPdfParams = {
   footerHtml?: string
 }
 
+async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader }: BuildInvoicePrintPdfParams) {
+  const rendererUrl = process.env.PDF_RENDERER_URL
+  if (!rendererUrl) return null
+
+  const rendererToken = process.env.PDF_RENDERER_TOKEN
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+
+  if (rendererToken) {
+    headers.Authorization = `Bearer ${rendererToken}`
+  }
+
+  if (cookieHeader) {
+    headers.Cookie = cookieHeader
+  }
+
+  const response = await fetch(rendererUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      invoiceId,
+      appUrl,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`External PDF renderer failed with status ${response.status}`)
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer())
+  return buffer.length > 0 ? buffer : null
+}
+
 export async function buildInvoicePrintPdf({ invoiceId, appUrl, cookieHeader, footerHtml }: BuildInvoicePrintPdfParams) {
-  void appUrl
-  void cookieHeader
   void footerHtml
+
+  try {
+    const externalPdf = await tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader })
+    if (externalPdf) {
+      return externalPdf
+    }
+  } catch (error) {
+    console.error("[PDF] External renderer failed, using fallback", error)
+  }
 
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },

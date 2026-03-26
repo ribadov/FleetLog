@@ -1,13 +1,27 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { createClient } from "@libsql/client";
+import { createClient } from "@libsql/client/http";
 
 function requiredEnv(name) {
   const value = process.env[name];
   if (!value || value.trim() === "") {
     throw new Error(`Missing required env var: ${name}`);
   }
+
+  const normalized = value.trim();
+  const looksLikePlaceholder =
+    normalized.includes("<") ||
+    normalized.includes(">") ||
+    normalized.includes("ECHTE_DB") ||
+    normalized.includes("ECHTER_TOKEN") ||
+    normalized.includes("deine-db") ||
+    normalized.includes("dein-token");
+
+  if (looksLikePlaceholder) {
+    throw new Error(`Env var ${name} looks like a placeholder. Please use real production credentials.`);
+  }
+
   return value;
 }
 
@@ -81,8 +95,11 @@ async function markMigrationApplied(client, migrationName, checksum) {
 }
 
 async function main() {
-  const url = requiredEnv("DATABASE_URL");
+  const rawUrl = requiredEnv("DATABASE_URL");
   const authToken = requiredEnv("DATABASE_AUTH_TOKEN");
+  const url = rawUrl.startsWith("libsql://")
+    ? rawUrl.replace(/^libsql:\/\//, "https://")
+    : rawUrl;
 
   const migrationsDir = path.join(process.cwd(), "prisma", "migrations");
   const migrations = loadMigrations(migrationsDir);
@@ -101,25 +118,17 @@ async function main() {
     }
 
     console.log(`apply ${migration.dirName}`);
-    await client.batch([
-      { sql: "BEGIN" },
-      { sql: migration.script },
-      {
-        sql: `
-          INSERT INTO "_prisma_migrations"
-            ("id", "checksum", "finished_at", "migration_name", "logs", "rolled_back_at", "started_at", "applied_steps_count")
-          VALUES (?, ?, ?, ?, NULL, NULL, ?, 1)
-        `,
-        args: [crypto.randomUUID(), migration.checksum, nowIso(), migration.dirName, nowIso()],
-      },
-      { sql: "COMMIT" },
-    ]).catch(async (error) => {
+    await client.execute({ sql: "BEGIN" });
+    await client.execute({ sql: migration.script }).catch(async (error) => {
       try {
         await client.execute({ sql: "ROLLBACK" });
       } catch {
       }
       throw new Error(`Migration failed (${migration.dirName}): ${error instanceof Error ? error.message : String(error)}`);
     });
+
+    await markMigrationApplied(client, migration.dirName, migration.checksum);
+    await client.execute({ sql: "COMMIT" });
 
     executed += 1;
   }
@@ -134,6 +143,18 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  const message = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error ? error.stack : undefined;
+
+  if (message.includes("resp.body?.cancel is not a function")) {
+    console.error(
+      "Transport error while talking to Turso. Verify DATABASE_URL and DATABASE_AUTH_TOKEN are real values (no placeholders), then retry."
+    );
+  }
+
+  console.error(message);
+  if (stack) {
+    console.error(stack);
+  }
   process.exit(1);
 });

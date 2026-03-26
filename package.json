@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
-    "@cloudflare/puppeteer": "^1.0.6",
     "@libsql/client": "^0.17.2",
     "@opennextjs/cloudflare": "^1.17.3",
     "@prisma/adapter-libsql": "^6.12.0",

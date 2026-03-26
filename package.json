@@ -5,6 +5,7 @@
   "scripts": {
     "build": "next build",
     "db:prepare": "node scripts/ensure-sqlite-db.mjs",
+    "db:migrate:turso": "node scripts/apply-turso-migrations.mjs",
     "prisma:generate": "prisma generate",
     "predev": "npm run prisma:generate",
     "dev": "next dev",

@@ -12,7 +12,7 @@ if (fs.existsSync(envPath)) {
 }
 
 if (fs.existsSync(envLocalPath)) {
-  dotenv.config({ path: envLocalPath, override: true });
+  dotenv.config({ path: envLocalPath });
 }
 
 if (!process.env.DATABASE_URL) {

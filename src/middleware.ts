@@ -23,6 +23,12 @@ function hasSessionCookie(request: NextRequest) {
 
 export default function middleware(request: NextRequest) {
   const pathname = stripBasePath(request.nextUrl.pathname)
+  const isRscRequest = request.headers.has("rsc") || request.nextUrl.searchParams.has("_rsc")
+
+  if (isRscRequest) {
+    return NextResponse.next()
+  }
+
   const isLoggedIn = hasSessionCookie(request)
   const isAuthRoute = pathname === "/login" || pathname === "/register"
   const isProtectedRoute =

@@ -54,6 +54,102 @@ function loadMigrations(baseDir) {
   });
 }
 
+function splitSqlStatements(sqlScript) {
+  const statements = [];
+  let current = "";
+  let index = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  while (index < sqlScript.length) {
+    const char = sqlScript[index];
+    const nextChar = sqlScript[index + 1];
+
+    if (inLineComment) {
+      current += char;
+      if (char === "\n") {
+        inLineComment = false;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (inBlockComment) {
+      current += char;
+      if (char === "*" && nextChar === "/") {
+        current += nextChar;
+        inBlockComment = false;
+        index += 2;
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (!inSingleQuote && !inDoubleQuote && char === "-" && nextChar === "-") {
+      current += char + nextChar;
+      inLineComment = true;
+      index += 2;
+      continue;
+    }
+
+    if (!inSingleQuote && !inDoubleQuote && char === "/" && nextChar === "*") {
+      current += char + nextChar;
+      inBlockComment = true;
+      index += 2;
+      continue;
+    }
+
+    if (char === "'" && !inDoubleQuote) {
+      const escapedQuote = inSingleQuote && nextChar === "'";
+      current += char;
+      if (escapedQuote) {
+        current += nextChar;
+        index += 2;
+        continue;
+      }
+      inSingleQuote = !inSingleQuote;
+      index += 1;
+      continue;
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      const escapedQuote = inDoubleQuote && nextChar === '"';
+      current += char;
+      if (escapedQuote) {
+        current += nextChar;
+        index += 2;
+        continue;
+      }
+      inDoubleQuote = !inDoubleQuote;
+      index += 1;
+      continue;
+    }
+
+    if (!inSingleQuote && !inDoubleQuote && char === ";") {
+      const trimmed = current.trim();
+      if (trimmed) {
+        statements.push(trimmed);
+      }
+      current = "";
+      index += 1;
+      continue;
+    }
+
+    current += char;
+    index += 1;
+  }
+
+  const trailing = current.trim();
+  if (trailing) {
+    statements.push(trailing);
+  }
+
+  return statements;
+}
+
 async function ensurePrismaMigrationsTable(client) {
   await client.execute({
     sql: `
@@ -118,14 +214,23 @@ async function main() {
     }
 
     console.log(`apply ${migration.dirName}`);
+    const statements = splitSqlStatements(migration.script);
+
     await client.execute({ sql: "BEGIN" });
-    await client.execute({ sql: migration.script }).catch(async (error) => {
+    try {
+      for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+        const statement = statements[statementIndex];
+        await client.execute({ sql: statement });
+      }
+    } catch (error) {
       try {
         await client.execute({ sql: "ROLLBACK" });
       } catch {
       }
-      throw new Error(`Migration failed (${migration.dirName}): ${error instanceof Error ? error.message : String(error)}`);
-    });
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Migration failed (${migration.dirName}): ${errorMessage}`);
+    }
 
     await markMigrationApplied(client, migration.dirName, migration.checksum);
     await client.execute({ sql: "COMMIT" });

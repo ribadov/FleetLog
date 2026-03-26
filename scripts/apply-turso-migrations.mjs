@@ -215,25 +215,17 @@ async function main() {
 
     console.log(`apply ${migration.dirName}`);
     const statements = splitSqlStatements(migration.script);
-
-    await client.execute({ sql: "BEGIN" });
     try {
       for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
         const statement = statements[statementIndex];
         await client.execute({ sql: statement });
       }
     } catch (error) {
-      try {
-        await client.execute({ sql: "ROLLBACK" });
-      } catch {
-      }
-
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new Error(`Migration failed (${migration.dirName}): ${errorMessage}`);
     }
 
     await markMigrationApplied(client, migration.dirName, migration.checksum);
-    await client.execute({ sql: "COMMIT" });
 
     executed += 1;
   }

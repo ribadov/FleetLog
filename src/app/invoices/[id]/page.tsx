@@ -52,6 +52,14 @@ export default async function InvoiceDetailPage({ params }: Params) {
           manager: true,
         },
       },
+      transports: {
+        orderBy: { date: "asc" },
+        include: {
+          legs: {
+            orderBy: { sequence: "asc" },
+          },
+        },
+      },
     },
   });
 
@@ -64,6 +72,14 @@ export default async function InvoiceDetailPage({ params }: Params) {
         workspace: {
           include: {
             manager: true,
+          },
+        },
+        transports: {
+          orderBy: { date: "asc" },
+          include: {
+            legs: {
+              orderBy: { sequence: "asc" },
+            },
           },
         },
       },
@@ -88,18 +104,8 @@ export default async function InvoiceDetailPage({ params }: Params) {
     redirect("/invoices");
   }
 
-  const transports = await prisma.transport.findMany({
-    where: { invoiceId: invoice.id },
-    orderBy: { date: "asc" },
-    include: {
-      legs: {
-        orderBy: { sequence: "asc" },
-      },
-    },
-  });
-
   const taxRate = 0.19;
-  const netTotal = transports.reduce((sum, transport) => sum + transport.price, 0);
+  const netTotal = invoice.transports.reduce((sum, transport) => sum + transport.price, 0);
   const taxTotal = netTotal * taxRate;
   const grossTotal = netTotal + taxTotal;
   const dueDate = invoice.sentAt
@@ -260,7 +266,7 @@ export default async function InvoiceDetailPage({ params }: Params) {
               </tr>
             </thead>
             <tbody>
-              {transports.map((transport) => {
+              {invoice.transports.map((transport) => {
                 const hasMultiStops = (transport.legs ?? []).length > 1;
 
                 // Render legs if multistop, otherwise just the main transport row

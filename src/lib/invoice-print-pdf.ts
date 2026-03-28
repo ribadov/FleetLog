@@ -1,6 +1,3 @@
-import fs from "node:fs"
-import { chromium } from "playwright-core"
-
 type BuildInvoicePrintPdfParams = {
   invoiceId: string
   appUrl: string
@@ -8,8 +5,46 @@ type BuildInvoicePrintPdfParams = {
   footerHtml?: string
 }
 
-function resolveBrowserExecutablePath() {
+async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerHtml }: BuildInvoicePrintPdfParams) {
+  const rendererUrl = process.env.PDF_RENDERER_URL
+  if (!rendererUrl) return null
+
+  const rendererToken = process.env.PDF_RENDERER_TOKEN
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+
+  if (rendererToken) {
+    headers.Authorization = `Bearer ${rendererToken}`
+  }
+
+  if (cookieHeader) {
+    headers.Cookie = cookieHeader
+  }
+
+  const response = await fetch(rendererUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      invoiceId,
+      appUrl,
+      footerHtml,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`External PDF renderer failed with status ${response.status}`)
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer())
+  return buffer.length > 0 ? buffer : null
+}
+
+async function resolveBrowserExecutablePath() {
+  const fs = await import("node:fs")
   const fromEnv = process.env.CHROMIUM_PATH || process.env.PLAYWRIGHT_CHROMIUM_PATH
+
   if (fromEnv && fs.existsSync(fromEnv)) {
     return fromEnv
   }
@@ -26,11 +61,14 @@ function resolveBrowserExecutablePath() {
   return candidates.find((path) => fs.existsSync(path))
 }
 
-export async function buildInvoicePrintPdf({ invoiceId, appUrl, cookieHeader, footerHtml }: BuildInvoicePrintPdfParams) {
-  const executablePath = resolveBrowserExecutablePath()
+async function buildWithLocalPlaywright({ invoiceId, appUrl, cookieHeader, footerHtml }: BuildInvoicePrintPdfParams) {
+  const executablePath = await resolveBrowserExecutablePath()
+
   if (!executablePath) {
-    throw new Error("No Chromium executable found. Please set CHROMIUM_PATH.")
+    throw new Error("No Chromium executable found and no external renderer configured. Set CHROMIUM_PATH or PDF_RENDERER_URL.")
   }
+
+  const { chromium } = await import("playwright-core")
 
   const browser = await chromium.launch({
     executablePath,
@@ -69,4 +107,13 @@ export async function buildInvoicePrintPdf({ invoiceId, appUrl, cookieHeader, fo
   } finally {
     await browser.close()
   }
+}
+
+export async function buildInvoicePrintPdf(params: BuildInvoicePrintPdfParams) {
+  const externalPdf = await tryExternalPdfRenderer(params)
+  if (externalPdf) {
+    return externalPdf
+  }
+
+  return buildWithLocalPlaywright(params)
 }

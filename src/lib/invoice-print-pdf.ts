@@ -47,6 +47,18 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
     }
   }
 
+  try {
+    const app = new URL(appUrl)
+    if (app.hostname.startsWith("fleetlog.")) {
+      const derivedRendererUrl = `https://${app.hostname.replace("fleetlog.", "fleetlog-pdf-renderer.")}/render-invoice`
+      if (!candidates.includes(derivedRendererUrl)) {
+        candidates.push(derivedRendererUrl)
+      }
+    }
+  } catch {
+    // ignore invalid appUrl parsing for fallback candidate generation
+  }
+
   let lastStatus: number | null = null
 
   for (const candidateUrl of candidates) {
@@ -68,7 +80,7 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
     }
   }
 
-  throw new Error(`External PDF renderer failed with status ${lastStatus ?? "unknown"}`)
+  throw new Error(`External PDF renderer failed with status ${lastStatus ?? "unknown"} (tried ${candidates.length} url(s))`)
 }
 
 async function resolveBrowserExecutablePath() {

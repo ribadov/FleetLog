@@ -55,6 +55,13 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
         candidates.push(derivedRendererUrl)
       }
     }
+
+    if (app.hostname.endsWith("workers.dev")) {
+      const canonicalWorkersRenderer = "https://fleetlog-pdf-renderer.ribadov.workers.dev/render-invoice"
+      if (!candidates.includes(canonicalWorkersRenderer)) {
+        candidates.push(canonicalWorkersRenderer)
+      }
+    }
   } catch {
     // ignore invalid appUrl parsing for fallback candidate generation
   }
@@ -80,7 +87,7 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
     }
   }
 
-  throw new Error(`External PDF renderer failed with status ${lastStatus ?? "unknown"} (tried ${candidates.length} url(s))`)
+  throw new Error(`External PDF renderer failed with status ${lastStatus ?? "unknown"} (tried ${candidates.join(", ")})`)
 }
 
 async function resolveBrowserExecutablePath() {

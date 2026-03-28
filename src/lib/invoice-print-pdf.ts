@@ -23,22 +23,52 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
     headers.Cookie = cookieHeader
   }
 
-  const response = await fetch(rendererUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      invoiceId,
-      appUrl,
-      footerHtml,
-    }),
+  const payload = JSON.stringify({
+    invoiceId,
+    appUrl,
+    footerHtml,
   })
 
-  if (!response.ok) {
-    throw new Error(`External PDF renderer failed with status ${response.status}`)
+  const candidates = [rendererUrl]
+
+  try {
+    const parsed = new URL(rendererUrl)
+    if (!parsed.pathname.endsWith("/render-invoice")) {
+      const withPath = `${parsed.origin}${parsed.pathname.replace(/\/$/, "")}/render-invoice`
+      if (!candidates.includes(withPath)) {
+        candidates.push(withPath)
+      }
+    }
+  } catch {
+    const normalized = rendererUrl.replace(/\/$/, "")
+    const withPath = `${normalized}/render-invoice`
+    if (!normalized.endsWith("/render-invoice") && !candidates.includes(withPath)) {
+      candidates.push(withPath)
+    }
   }
 
-  const buffer = Buffer.from(await response.arrayBuffer())
-  return buffer.length > 0 ? buffer : null
+  let lastStatus: number | null = null
+
+  for (const candidateUrl of candidates) {
+    const response = await fetch(candidateUrl, {
+      method: "POST",
+      headers,
+      body: payload,
+    })
+
+    if (response.ok) {
+      const buffer = Buffer.from(await response.arrayBuffer())
+      return buffer.length > 0 ? buffer : null
+    }
+
+    lastStatus = response.status
+
+    if (response.status !== 404) {
+      throw new Error(`External PDF renderer failed with status ${response.status}`)
+    }
+  }
+
+  throw new Error(`External PDF renderer failed with status ${lastStatus ?? "unknown"}`)
 }
 
 async function resolveBrowserExecutablePath() {

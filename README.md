@@ -153,3 +153,25 @@ npm run deploy
 - Die Rechnung selbst wird **nicht** umgebaut: gleiches Invoice-HTML, gleiche Print-CSS, gleicher Footer.
 - FleetLog sendet `invoiceId`, `appUrl`, `footerHtml` an den Renderer.
 - Der Renderer öffnet `${appUrl}/invoices/${invoiceId}` und erzeugt daraus das PDF mit den vorhandenen Print-Einstellungen.
+
+### Alternative ohne eigenen VPS: separater Cloudflare Renderer-Worker
+
+Im Ordner `renderer-worker/` liegt eine sofort nutzbare Variante für Cloudflare Workers.
+
+Kurzablauf:
+
+```bash
+cd renderer-worker
+npm install
+npx wrangler secret put RENDERER_TOKEN
+npx wrangler secret put ALLOWED_APP_ORIGINS
+npm run deploy
+```
+
+Danach im Hauptprojekt:
+
+```bash
+npx wrangler secret put PDF_RENDERER_URL
+npx wrangler secret put PDF_RENDERER_TOKEN
+npm run deploy
+```

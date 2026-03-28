@@ -82,8 +82,10 @@ async function buildWithLocalPlaywright({ invoiceId, appUrl, cookieHeader, foote
 
     const page = await context.newPage()
     await page.goto(`${appUrl.replace(/\/$/, "")}/invoices/${invoiceId}`, {
-      waitUntil: "networkidle",
+      waitUntil: "load",
+      timeout: 30000,
     })
+    await page.waitForTimeout(250)
 
     await page.emulateMedia({ media: "print" })
 

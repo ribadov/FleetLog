@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma"
-import { buildInvoicePdfBuffer } from "@/lib/invoice-pdf"
+import fs from "node:fs"
+import { chromium } from "playwright-core"
 
 type BuildInvoicePrintPdfParams = {
   invoiceId: string
@@ -8,117 +8,65 @@ type BuildInvoicePrintPdfParams = {
   footerHtml?: string
 }
 
-async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader }: BuildInvoicePrintPdfParams) {
-  const rendererUrl = process.env.PDF_RENDERER_URL
-  if (!rendererUrl) return null
-
-  const rendererToken = process.env.PDF_RENDERER_TOKEN
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+function resolveBrowserExecutablePath() {
+  const fromEnv = process.env.CHROMIUM_PATH || process.env.PLAYWRIGHT_CHROMIUM_PATH
+  if (fromEnv && fs.existsSync(fromEnv)) {
+    return fromEnv
   }
 
-  if (rendererToken) {
-    headers.Authorization = `Bearer ${rendererToken}`
-  }
+  const candidates = [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+  ]
 
-  if (cookieHeader) {
-    headers.Cookie = cookieHeader
-  }
-
-  const response = await fetch(rendererUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      invoiceId,
-      appUrl,
-    }),
-  })
-
-  if (!response.ok) {
-    throw new Error(`External PDF renderer failed with status ${response.status}`)
-  }
-
-  const buffer = Buffer.from(await response.arrayBuffer())
-  return buffer.length > 0 ? buffer : null
+  return candidates.find((path) => fs.existsSync(path))
 }
 
 export async function buildInvoicePrintPdf({ invoiceId, appUrl, cookieHeader, footerHtml }: BuildInvoicePrintPdfParams) {
-  void footerHtml
+  const executablePath = resolveBrowserExecutablePath()
+  if (!executablePath) {
+    throw new Error("No Chromium executable found. Please set CHROMIUM_PATH.")
+  }
+
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+  })
 
   try {
-    const externalPdf = await tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader })
-    if (externalPdf) {
-      return externalPdf
-    }
-  } catch (error) {
-    console.error("[PDF] External renderer failed, using fallback", error)
-  }
+    const context = await browser.newContext({
+      extraHTTPHeaders: cookieHeader ? { cookie: cookieHeader } : undefined,
+    })
 
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: invoiceId },
-    include: {
-      contractor: true,
-      sentBy: true,
-      workspace: {
-        include: {
-          manager: true,
-        },
+    const page = await context.newPage()
+    await page.goto(`${appUrl.replace(/\/$/, "")}/invoices/${invoiceId}`, {
+      waitUntil: "networkidle",
+    })
+
+    await page.emulateMedia({ media: "print" })
+
+    const pdf = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      preferCSSPageSize: true,
+      displayHeaderFooter: Boolean(footerHtml),
+      headerTemplate: "<span></span>",
+      footerTemplate: footerHtml || "<span></span>",
+      margin: {
+        top: "12mm",
+        right: "10mm",
+        bottom: footerHtml ? "26mm" : "12mm",
+        left: "10mm",
       },
-      transports: {
-        orderBy: { date: "asc" },
-        select: {
-          date: true,
-          orderNumber: true,
-          jobNumber: true,
-          containerSize: true,
-          fromPlace: true,
-          toPlace: true,
-          notes: true,
-          isIMO: true,
-          price: true,
-        },
-      },
-    },
-  })
+    })
 
-  if (!invoice) {
-    throw new Error("Invoice not found")
+    await context.close()
+    return Buffer.from(pdf)
+  } finally {
+    await browser.close()
   }
-
-  const sender = invoice.workspace?.manager ?? invoice.sentBy ?? invoice.contractor
-
-  return buildInvoicePdfBuffer({
-    invoiceNumber: invoice.invoiceNumber,
-    createdAt: invoice.createdAt,
-    sentAt: invoice.sentAt,
-    recipientEmail: invoice.recipientEmail,
-    sender: {
-      name: sender.name,
-      companyName: sender.companyName,
-      companyStreet: sender.companyStreet,
-      companyHouseNumber: sender.companyHouseNumber,
-      companyPostalCode: sender.companyPostalCode,
-      companyCity: sender.companyCity,
-      companyCountry: sender.companyCountry,
-      vatId: sender.vatId,
-      taxNumber: sender.taxNumber,
-      bankName: sender.bankName,
-      bankAccountHolder: sender.bankAccountHolder,
-      iban: sender.iban,
-      bic: sender.bic,
-    },
-    recipient: {
-      name: invoice.contractor.name,
-      companyName: invoice.contractor.companyName,
-      companyStreet: invoice.contractor.companyStreet,
-      companyHouseNumber: invoice.contractor.companyHouseNumber,
-      companyPostalCode: invoice.contractor.companyPostalCode,
-      companyCity: invoice.contractor.companyCity,
-      companyCountry: invoice.contractor.companyCountry,
-      vatId: invoice.contractor.vatId,
-      taxNumber: invoice.contractor.taxNumber,
-    },
-    transports: invoice.transports,
-  })
 }

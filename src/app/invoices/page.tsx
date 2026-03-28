@@ -35,37 +35,19 @@ export default async function InvoicesPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  const openTransports =
+  const openByContractor =
     session.user.role === "MANAGER"
-      ? await prisma.transport.findMany({
+      ? await prisma.transport.groupBy({
+          by: ["contractorId"],
           where: {
             workspaceId,
             contractorId: { not: null },
             invoiceId: null,
           },
-          select: {
-            contractorId: true,
-            price: true,
-          },
+          _count: { _all: true },
+          _sum: { price: true },
         })
       : [];
-
-  const openByContractor = Array.from(
-    openTransports.reduce((map, item) => {
-      if (!item.contractorId) return map;
-
-      const current = map.get(item.contractorId) ?? {
-        contractorId: item.contractorId,
-        _count: { _all: 0 },
-        _sum: { price: 0 },
-      };
-
-      current._count._all += 1;
-      current._sum.price += item.price ?? 0;
-      map.set(item.contractorId, current);
-      return map;
-    }, new Map<string, { contractorId: string; _count: { _all: number }; _sum: { price: number } }>() ).values()
-  );
 
   const contractorIds = openByContractor
     .map((item) => item.contractorId)

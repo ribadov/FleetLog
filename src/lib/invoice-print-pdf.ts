@@ -6,7 +6,9 @@ type BuildInvoicePrintPdfParams = {
 }
 
 async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerHtml }: BuildInvoicePrintPdfParams) {
-  const rendererUrl = process.env.PDF_RENDERER_URL
+  // In Cloudflare Workers, process.env might not be available
+  // Fallback to hardcoded URL or env variable
+  const rendererUrl = process.env.PDF_RENDERER_URL || "https://fleetlog-pdf-renderer.ribadov.workers.dev"
   if (!rendererUrl) return null
 
   const rendererToken = process.env.PDF_RENDERER_TOKEN

@@ -9,6 +9,18 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
   // Cloudflare Workers: hardcode renderer URL since process.env may not be available at runtime
   const rendererUrl = (process.env?.PDF_RENDERER_URL ?? "") || "https://fleetlog-pdf-renderer.ribadov.workers.dev"
   
+  // First, check if the renderer is alive
+  try {
+    console.log(`[PDF] Checking renderer health at: ${rendererUrl}/health`)
+    const healthResponse = await fetch(`${rendererUrl}/health`, { method: "GET" })
+    console.log(`[PDF] Health check status: ${healthResponse.status}`)
+    if (!healthResponse.ok) {
+      console.warn(`[PDF] Renderer health check failed with status ${healthResponse.status}`)
+    }
+  } catch (error) {
+    console.error(`[PDF] Health check failed:`, error instanceof Error ? error.message : String(error))
+  }
+  
   const rendererToken = process.env?.PDF_RENDERER_TOKEN
 
   const headers: Record<string, string> = {

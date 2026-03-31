@@ -23,5 +23,8 @@
   },
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    "PDF_RENDERER_URL": "https://fleetlog-pdf-renderer.ribadov.workers.dev"
   }
 }

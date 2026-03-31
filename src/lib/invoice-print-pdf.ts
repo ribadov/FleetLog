@@ -87,7 +87,9 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
     }
   }
 
-  throw new Error(`External PDF renderer failed with status ${lastStatus ?? "unknown"} (tried ${candidates.join(", ")})`)
+  // All candidates returned 404 - renderer service is not available
+  // Return null to trigger fallback to local Playwright rendering
+  return null
 }
 
 async function resolveBrowserExecutablePath() {

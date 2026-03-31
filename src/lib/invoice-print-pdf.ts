@@ -6,13 +6,31 @@ type BuildInvoicePrintPdfParams = {
 }
 
 async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerHtml }: BuildInvoicePrintPdfParams) {
-  // Cloudflare Workers: hardcode renderer URL since process.env may not be available at runtime
-  const rendererUrl = (process.env?.PDF_RENDERER_URL ?? "") || "https://fleetlog-pdf-renderer.ribadov.workers.dev"
+  // Cloudflare Workers: normalize and validate renderer URL to avoid malformed env values.
+  const canonicalRendererBase = "https://fleetlog-pdf-renderer.ribadov.workers.dev"
+  const configuredRendererUrl = (process.env?.PDF_RENDERER_URL ?? "").trim()
+
+  let rendererBaseUrl = canonicalRendererBase
+  if (configuredRendererUrl) {
+    try {
+      const parsed = new URL(configuredRendererUrl)
+      rendererBaseUrl = `${parsed.origin}${parsed.pathname.replace(/\/$/, "")}`
+    } catch {
+      console.warn(`[PDF] Ignoring invalid PDF_RENDERER_URL: ${configuredRendererUrl}`)
+    }
+  }
+
+  const primaryRenderUrl = rendererBaseUrl.endsWith("/render-invoice")
+    ? rendererBaseUrl
+    : `${rendererBaseUrl}/render-invoice`
+  const primaryHealthUrl = rendererBaseUrl.endsWith("/render-invoice")
+    ? rendererBaseUrl.replace(/\/render-invoice$/, "/health")
+    : `${rendererBaseUrl}/health`
   
   // First, check if the renderer is alive
   try {
-    console.log(`[PDF] Checking renderer health at: ${rendererUrl}/health`)
-    const healthResponse = await fetch(`${rendererUrl}/health`, { method: "GET" })
+    console.log(`[PDF] Checking renderer health at: ${primaryHealthUrl}`)
+    const healthResponse = await fetch(primaryHealthUrl, { method: "GET" })
     console.log(`[PDF] Health check status: ${healthResponse.status}`)
     if (!healthResponse.ok) {
       console.warn(`[PDF] Renderer health check failed with status ${healthResponse.status}`)
@@ -41,33 +59,10 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
     footerHtml,
   })
 
-  const candidates = [rendererUrl]
-
-  try {
-    const parsed = new URL(rendererUrl)
-    if (!parsed.pathname.endsWith("/render-invoice")) {
-      const withPath = `${parsed.origin}${parsed.pathname.replace(/\/$/, "")}/render-invoice`
-      if (!candidates.includes(withPath)) {
-        candidates.push(withPath)
-      }
-    }
-  } catch {
-    const normalized = rendererUrl.replace(/\/$/, "")
-    const withPath = `${normalized}/render-invoice`
-    if (!normalized.endsWith("/render-invoice") && !candidates.includes(withPath)) {
-      candidates.push(withPath)
-    }
-  }
+  const candidates = [primaryRenderUrl]
 
   try {
     const app = new URL(appUrl)
-    if (app.hostname.startsWith("fleetlog.")) {
-      const derivedRendererUrl = `https://${app.hostname.replace("fleetlog.", "fleetlog-pdf-renderer.")}/render-invoice`
-      if (!candidates.includes(derivedRendererUrl)) {
-        candidates.push(derivedRendererUrl)
-      }
-    }
-
     if (app.hostname.endsWith("workers.dev")) {
       const canonicalWorkersRenderer = "https://fleetlog-pdf-renderer.ribadov.workers.dev/render-invoice"
       if (!candidates.includes(canonicalWorkersRenderer)) {

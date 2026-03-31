@@ -6,12 +6,10 @@ type BuildInvoicePrintPdfParams = {
 }
 
 async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerHtml }: BuildInvoicePrintPdfParams) {
-  // In Cloudflare Workers, process.env might not be available
-  // Fallback to hardcoded URL or env variable
-  const rendererUrl = process.env.PDF_RENDERER_URL || "https://fleetlog-pdf-renderer.ribadov.workers.dev"
-  if (!rendererUrl) return null
-
-  const rendererToken = process.env.PDF_RENDERER_TOKEN
+  // Cloudflare Workers: hardcode renderer URL since process.env may not be available at runtime
+  const rendererUrl = (process.env?.PDF_RENDERER_URL ?? "") || "https://fleetlog-pdf-renderer.ribadov.workers.dev"
+  
+  const rendererToken = process.env?.PDF_RENDERER_TOKEN
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -69,27 +67,37 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
   }
 
   let lastStatus: number | null = null
+  let lastError: string | null = null
 
   for (const candidateUrl of candidates) {
-    const response = await fetch(candidateUrl, {
-      method: "POST",
-      headers,
-      body: payload,
-    })
+    try {
+      const response = await fetch(candidateUrl, {
+        method: "POST",
+        headers,
+        body: payload,
+      })
 
-    if (response.ok) {
-      const buffer = Buffer.from(await response.arrayBuffer())
-      return buffer.length > 0 ? buffer : null
-    }
+      if (response.ok) {
+        const buffer = Buffer.from(await response.arrayBuffer())
+        return buffer.length > 0 ? buffer : null
+      }
 
-    lastStatus = response.status
+      lastStatus = response.status
 
-    if (response.status !== 404) {
-      throw new Error(`External PDF renderer failed with status ${response.status}`)
+      if (response.status !== 404) {
+        throw new Error(`External PDF renderer failed with status ${response.status}`)
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
+      // Log the error but continue trying other candidates
+      console.error(`PDF renderer attempt failed for ${candidateUrl}:`, lastError)
     }
   }
 
-  // All candidates returned 404 - renderer service is not available
+  // All candidates failed - renderer service is not available
+  // Log what happened for debugging
+  console.error(`All PDF renderer candidates failed. Last status: ${lastStatus}, Last error: ${lastError}`)
+  
   // Return null to trigger fallback to local Playwright rendering
   return null
 }
@@ -118,7 +126,10 @@ async function buildWithLocalPlaywright({ invoiceId, appUrl, cookieHeader, foote
   const executablePath = await resolveBrowserExecutablePath()
 
   if (!executablePath) {
-    throw new Error("No Chromium executable found and no external renderer configured. Set CHROMIUM_PATH or PDF_RENDERER_URL.")
+    throw new Error(
+      "No local Chromium executable found. External PDF renderer must be available via PDF_RENDERER_URL env variable. " +
+      "Ensure the renderer worker (https://fleetlog-pdf-renderer.ribadov.workers.dev) is deployed and accessible."
+    )
   }
 
   const { chromium } = await import("playwright-core")

@@ -69,13 +69,18 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
   let lastStatus: number | null = null
   let lastError: string | null = null
 
+  console.log(`[PDF] Trying ${candidates.length} renderer candidates:`, candidates)
+
   for (const candidateUrl of candidates) {
     try {
+      console.log(`[PDF] Attempting renderer at: ${candidateUrl}`)
       const response = await fetch(candidateUrl, {
         method: "POST",
         headers,
         body: payload,
       })
+
+      console.log(`[PDF] Renderer responded with status: ${response.status}`)
 
       if (response.ok) {
         const buffer = Buffer.from(await response.arrayBuffer())
@@ -90,13 +95,13 @@ async function tryExternalPdfRenderer({ invoiceId, appUrl, cookieHeader, footerH
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error)
       // Log the error but continue trying other candidates
-      console.error(`PDF renderer attempt failed for ${candidateUrl}:`, lastError)
+      console.error(`[PDF] Renderer attempt failed for ${candidateUrl}:`, lastError)
     }
   }
 
   // All candidates failed - renderer service is not available
   // Log what happened for debugging
-  console.error(`All PDF renderer candidates failed. Last status: ${lastStatus}, Last error: ${lastError}`)
+  console.error(`[PDF] All PDF renderer candidates failed. Last status: ${lastStatus}, Last error: ${lastError}`)
   
   // Return null to trigger fallback to local Playwright rendering
   return null
@@ -176,10 +181,18 @@ async function buildWithLocalPlaywright({ invoiceId, appUrl, cookieHeader, foote
 }
 
 export async function buildInvoicePrintPdf(params: BuildInvoicePrintPdfParams) {
-  const externalPdf = await tryExternalPdfRenderer(params)
-  if (externalPdf) {
-    return externalPdf
-  }
+  try {
+    console.log(`[PDF] Starting PDF generation for invoice: ${params.invoiceId}`)
+    const externalPdf = await tryExternalPdfRenderer(params)
+    if (externalPdf) {
+      console.log(`[PDF] Successfully generated PDF using external renderer`)
+      return externalPdf
+    }
 
-  return buildWithLocalPlaywright(params)
+    console.log(`[PDF] External renderer failed or unavailable, attempting local rendering`)
+    return buildWithLocalPlaywright(params)
+  } catch (error) {
+    console.error(`[PDF] Error generating PDF:`, error)
+    throw error
+  }
 }

@@ -101,3 +101,77 @@ AUTH_SECRET=<random-secret>
 NEXTAUTH_SECRET=<optional-legacy-alias>
 NEXTAUTH_URL=https://www.karr-logistik.com/fleetlog
 ```
+
+Optional for external PDF rendering service (recommended for production-like invoice layout without increasing Worker size):
+
+```
+PDF_RENDERER_URL=https://<your-pdf-service>/render-invoice
+PDF_RENDERER_TOKEN=<optional-bearer-token>
+```
+
+## External PDF Renderer (Layout unverändert)
+
+Damit das Rechnungs-PDF in Produktion exakt wie die Druckansicht bleibt (gleiches HTML/CSS, gleiche Größen/Positionen), kann ein separater Renderer-Service genutzt werden.
+
+FleetLog enthält dafür bereits einen Server unter `scripts/pdf-renderer-server.mjs`.
+
+### 1) Renderer starten
+
+```bash
+PDF_RENDERER_PORT=8788 \
+PDF_RENDERER_TOKEN=<strong-random-token> \
+PDF_ALLOWED_APP_ORIGINS=https://fleetlog.ribadov.workers.dev \
+npm run pdf-renderer:start
+```
+
+Healthcheck:
+
+```bash
+curl http://127.0.0.1:8788/health
+```
+
+### 2) FleetLog Worker mit Renderer verbinden
+
+Setze die Secrets in Cloudflare Wrangler:
+
+```bash
+npx wrangler secret put PDF_RENDERER_URL
+# value: https://<renderer-host>/render-invoice
+
+npx wrangler secret put PDF_RENDERER_TOKEN
+# value: derselbe Token wie im Renderer
+```
+
+Danach neu deployen:
+
+```bash
+npm run deploy
+```
+
+### 3) Verhalten
+
+- Die Rechnung selbst wird **nicht** umgebaut: gleiches Invoice-HTML, gleiche Print-CSS, gleicher Footer.
+- FleetLog sendet `invoiceId`, `appUrl`, `footerHtml` an den Renderer.
+- Der Renderer öffnet `${appUrl}/invoices/${invoiceId}` und erzeugt daraus das PDF mit den vorhandenen Print-Einstellungen.
+
+### Alternative ohne eigenen VPS: separater Cloudflare Renderer-Worker
+
+Im Ordner `renderer-worker/` liegt eine sofort nutzbare Variante für Cloudflare Workers.
+
+Kurzablauf:
+
+```bash
+cd renderer-worker
+npm install
+npx wrangler secret put RENDERER_TOKEN
+npx wrangler secret put ALLOWED_APP_ORIGINS
+npm run deploy
+```
+
+Danach im Hauptprojekt:
+
+```bash
+npx wrangler secret put PDF_RENDERER_URL
+npx wrangler secret put PDF_RENDERER_TOKEN
+npm run deploy
+```

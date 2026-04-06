@@ -1,16 +1,52 @@
-import { PrismaClient } from "@prisma/client"
+import { PrismaClient } from "@prisma/client/wasm.js"
 import { PrismaLibSQL } from "@prisma/adapter-libsql/web"
+import { getCloudflareContext } from "@opennextjs/cloudflare"
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
+function readProcessEnv(name: string) {
+	const processRef = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+	return processRef?.env?.[name]
+}
+
+function readCloudflareEnv(name: string) {
+	try {
+		const context = getCloudflareContext()
+		const value = (context?.env as Record<string, unknown> | undefined)?.[name]
+		return typeof value === "string" ? value : undefined
+	} catch {
+		return undefined
+	}
+}
+
 function resolveRuntimeDatabaseUrl() {
-	return process.env.DATABASE_URL
+	const isDevelopment = readProcessEnv("NODE_ENV") === "development"
+	const runtimeDatabaseUrl = isDevelopment
+		? readProcessEnv("DATABASE_URL") ||
+			readProcessEnv("TURSO_DATABASE_URL") ||
+			readProcessEnv("LIBSQL_URL") ||
+			readCloudflareEnv("DATABASE_URL") ||
+			readCloudflareEnv("TURSO_DATABASE_URL") ||
+			readCloudflareEnv("LIBSQL_URL")
+		: readCloudflareEnv("DATABASE_URL") ||
+			readCloudflareEnv("TURSO_DATABASE_URL") ||
+			readCloudflareEnv("LIBSQL_URL")
+
+	if (runtimeDatabaseUrl?.startsWith("file:") && !isDevelopment) {
+		throw new Error(
+			`[Prisma] Invalid DATABASE_URL for production runtime: "${runtimeDatabaseUrl}". ` +
+				'Use a libsql/http/ws URL (e.g. "libsql://<db>.turso.io") and set it in Cloudflare env vars.'
+		)
+	}
+
+	return runtimeDatabaseUrl
 }
 
 function createPrismaClient() {
+	const isDevelopment = readProcessEnv("NODE_ENV") === "development"
 	const runtimeDatabaseUrl =
 		resolveRuntimeDatabaseUrl() ||
-		(process.env.NODE_ENV === "development" ? "file:./prisma/dev.db" : undefined)
+		(isDevelopment ? "file:./prisma/dev.db" : undefined)
 
 	if (!runtimeDatabaseUrl) {
 		throw new Error(
@@ -18,7 +54,12 @@ function createPrismaClient() {
 		)
 	}
 
-	const authToken = process.env.DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN
+	const authToken = isDevelopment
+		? readProcessEnv("DATABASE_AUTH_TOKEN") ||
+			readProcessEnv("TURSO_AUTH_TOKEN") ||
+			readCloudflareEnv("DATABASE_AUTH_TOKEN") ||
+			readCloudflareEnv("TURSO_AUTH_TOKEN")
+		: readCloudflareEnv("DATABASE_AUTH_TOKEN") || readCloudflareEnv("TURSO_AUTH_TOKEN")
 
 	const adapter = new PrismaLibSQL({
 		url: runtimeDatabaseUrl,

@@ -420,7 +420,7 @@ export default function NewTransportForm({ users, places, currentUserId, current
             )}
             {selectableContractors.length === 0 && (
               <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                Du hast noch keine Auftragnehmer. Bitte füge zuerst im Profil per Workspace-Code Auftragnehmer hinzu.
+                Du hast noch keine Auftraggeber. Bitte füge zuerst im Profil per Workspace-Code Auftraggeber hinzu.
               </p>
             )}
           </div>
@@ -437,7 +437,7 @@ export default function NewTransportForm({ users, places, currentUserId, current
               </select>
               {currentUserRole === "CONTRACTOR" && availableSubcontractors.length === 0 && (
                 <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  Du hast noch keine Auftragnehmer. Bitte füge zuerst im Profil per Workspace-Code Auftragnehmer hinzu.
+                  Du hast noch keine Auftraggeber. Bitte füge zuerst im Profil per Workspace-Code Auftraggeber hinzu.
                 </p>
               )}
           </div>

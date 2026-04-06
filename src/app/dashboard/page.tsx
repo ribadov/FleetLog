@@ -7,6 +7,23 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import DashboardStatsPanel from "./DashboardStatsPanel";
 
+async function withTimeout<T>(promise: Promise<T>, fallback: T, label: string, timeoutMs = 5000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race<T>([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    console.error(`[Dashboard] Query failed (${label})`, error);
+    return fallback;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export default async function DashboardPage() {
   const session = await auth();
   if (!session) redirect("/login");
@@ -27,60 +44,78 @@ export default async function DashboardPage() {
   }
 
   if (user.role === "ADMIN") {
-    totalWorkspaces = await prisma.workspace.count();
-    totalUsers = await prisma.user.count();
-    totalTransports = await prisma.transport.count();
-    const result = await prisma.transport.aggregate({ _sum: { price: true } });
+    totalWorkspaces = await withTimeout(prisma.workspace.count(), 0, "admin-workspaces");
+    totalUsers = await withTimeout(prisma.user.count(), 0, "admin-users");
+    totalTransports = await withTimeout(prisma.transport.count(), 0, "admin-transports");
+    const result = await withTimeout(
+      prisma.transport.aggregate({ _sum: { price: true } }),
+      { _sum: { price: 0 } },
+      "admin-revenue"
+    );
     totalRevenue = result._sum.price ?? 0;
   } else if (user.role === "DRIVER") {
-    totalTransports = await prisma.transport.count({
-      where: { driverId: user.id, workspaceId },
-    });
+    totalTransports = await withTimeout(
+      prisma.transport.count({
+        where: { driverId: user.id, workspaceId },
+      }),
+      0,
+      "driver-transports"
+    );
   } else if (user.role === "MANAGER") {
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId ?? "" },
-      select: { code: true },
-    });
+    const workspace = await withTimeout(
+      prisma.workspace.findUnique({
+        where: { id: workspaceId ?? "" },
+        select: { code: true },
+      }),
+      null,
+      "manager-workspace"
+    );
     workspaceCode = workspace?.code ?? null;
 
-    totalTransports = await prisma.transport.count({ where: { workspaceId } });
-    const result = await prisma.transport.aggregate({
-      where: { workspaceId },
-      _sum: { price: true },
-    });
+    totalTransports = await withTimeout(
+      prisma.transport.count({ where: { workspaceId } }),
+      0,
+      "manager-transports"
+    );
+    const result = await withTimeout(
+      prisma.transport.aggregate({
+        where: { workspaceId },
+        _sum: { price: true },
+      }),
+      { _sum: { price: 0 } },
+      "manager-revenue"
+    );
     totalRevenue = result._sum.price ?? 0;
   } else {
-    totalTransports = await prisma.transport.count({ where: { contractorId: user.id } });
+    totalTransports = await withTimeout(
+      prisma.transport.count({ where: { contractorId: user.id } }),
+      0,
+      "contractor-transports"
+    );
   }
 
-  const recentTransports = await prisma.transport.findMany({
-    where:
-      user.role === "ADMIN"
-        ? {}
-        : user.role === "DRIVER"
-          ? { driverId: user.id, workspaceId }
-          : user.role === "CONTRACTOR"
-            ? { contractorId: user.id }
-            : { workspaceId },
-    include: { driver: true },
-    orderBy: { date: "desc" },
-    take: 5,
-  });
+  const recentTransports = await withTimeout(
+    prisma.transport.findMany({
+      where:
+        user.role === "ADMIN"
+          ? {}
+          : user.role === "DRIVER"
+            ? { driverId: user.id, workspaceId }
+            : user.role === "CONTRACTOR"
+              ? { contractorId: user.id }
+              : { workspaceId },
+      include: { driver: true },
+      orderBy: { date: "desc" },
+      take: 5,
+    }),
+    [],
+    "recent-transports"
+  );
 
   const statsTransportsRaw =
     user.role === "ADMIN"
-      ? await prisma.transport.findMany({
-          select: {
-            date: true,
-            price: true,
-            contractor: { select: { name: true } },
-            seller: { select: { name: true } },
-          },
-          orderBy: { date: "asc" },
-        })
-      : user.role === "MANAGER"
-        ? await prisma.transport.findMany({
-            where: { workspaceId },
+      ? await withTimeout(
+          prisma.transport.findMany({
             select: {
               date: true,
               price: true,
@@ -88,10 +123,14 @@ export default async function DashboardPage() {
               seller: { select: { name: true } },
             },
             orderBy: { date: "asc" },
-          })
-        : user.role === "CONTRACTOR"
-          ? await prisma.transport.findMany({
-              where: { contractorId: user.id },
+          }),
+          [],
+          "stats-admin"
+        )
+      : user.role === "MANAGER"
+        ? await withTimeout(
+            prisma.transport.findMany({
+              where: { workspaceId },
               select: {
                 date: true,
                 price: true,
@@ -99,7 +138,25 @@ export default async function DashboardPage() {
                 seller: { select: { name: true } },
               },
               orderBy: { date: "asc" },
-            })
+            }),
+            [],
+            "stats-manager"
+          )
+        : user.role === "CONTRACTOR"
+          ? await withTimeout(
+              prisma.transport.findMany({
+                where: { contractorId: user.id },
+                select: {
+                  date: true,
+                  price: true,
+                  contractor: { select: { name: true } },
+                  seller: { select: { name: true } },
+                },
+                orderBy: { date: "asc" },
+              }),
+              [],
+              "stats-contractor"
+            )
           : [];
 
   const statsTransports = statsTransportsRaw.map((row) => ({

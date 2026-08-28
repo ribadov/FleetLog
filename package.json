@@ -10,7 +10,7 @@
     "prebuild": "npm run db:prepare && npm run prisma:generate",
     "build": "next build",
     "prestart": "npm run db:prepare && npm run prisma:generate",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0 -p $PORT",
     "admin:set-password": "node scripts/set-admin-password.mjs",
     "lint": "eslint"
   },

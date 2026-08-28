@@ -150,7 +150,7 @@ export default function DashboardStatsPanel({ role, nowIso, transports }: Props)
         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Gesamtumsatz</p>
           <p className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-            €{overallRevenue.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {overallRevenue.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Zeitraum: {timeframe}</p>
         </div>

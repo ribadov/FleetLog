@@ -14,6 +14,22 @@ interface ProfileData {
   phoneNumber: string | null
   preferredLanguage: string | null
   role: UserRole
+  workspace: {
+    id: string
+    name: string
+    code: string
+    manager: {
+      id: string
+      name: string
+      email: string
+      companyName: string | null
+      companyStreet: string | null
+      companyHouseNumber: string | null
+      companyPostalCode: string | null
+      companyCity: string | null
+      companyCountry: string | null
+    }
+  } | null
   companyName: string | null
   companyStreet: string | null
   companyHouseNumber: string | null
@@ -34,7 +50,20 @@ interface ProfileData {
 type PartnerManager = {
   id: string
   name: string
+  email: string
+  phoneNumber: string | null
   workspaceId: string | null
+
+  companyName: string | null
+  companyStreet: string | null
+  companyHouseNumber: string | null
+  companyPostalCode: string | null
+  companyCity: string | null
+  companyCountry: string | null
+
+  billingEmail: string | null
+  vatId: string | null
+  taxNumber: string | null
 }
 
 type WorkspaceDriver = {
@@ -42,6 +71,7 @@ type WorkspaceDriver = {
   name: string
   email: string
   role: UserRole
+  partnerWorkspaceId: string | null
 }
 
 export default function ProfilePage() {
@@ -71,7 +101,49 @@ export default function ProfilePage() {
     newPassword: "",
     confirmPassword: "",
   })
+  const [expandedPartnerId, setExpandedPartnerId] = useState<string | null>(null)
   const t = useMemo(() => getTranslator(locale), [locale])
+
+  const fetchProfile = async () => {
+    try {
+      setLoading(true)
+
+      const res = await fetch("/api/profile")
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          router.push("/login")
+          return
+        }
+
+        throw new Error("Failed to fetch profile")
+      }
+
+      const data = await res.json() as ProfileData
+
+      setForm(data)
+
+      // The workspace code created/assigned during registration
+      // is already part of the driver's profile.
+      if (data.role === "DRIVER") {
+        // Nothing else is required.
+        // Use data.workspaceCode wherever needed.
+      }
+
+      if (data.role === "CONTRACTOR") {
+        await loadContractorPartners()
+      } else if (data.role === "MANAGER") {
+        await loadManagerPartners()
+        await loadManagerDrivers()
+      }
+
+      setError("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load profile")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const loadContractorPartners = async () => {
     const partnerResponse = await fetch("/api/contractor-partners")
@@ -87,6 +159,15 @@ export default function ProfilePage() {
 
     setPartnerManagers(partnerData.managers)
     setSelectedPartnerManagerIds(partnerData.selectedManagerIds)
+  }
+
+  const loadDriverPartners = async () => {
+    const partnerResponse = await fetch("/api/contractor-partners")
+    if (!partnerResponse.ok) {
+      const payload = await partnerResponse.json().catch(() => ({ error: "Failed to load partners" }))
+      throw new Error(payload.error || "Failed to load partners")
+    }
+
   }
 
   const loadManagerPartners = async () => {
@@ -188,6 +269,7 @@ export default function ProfilePage() {
       name: form.name,
       phoneNumber: form.phoneNumber,
       preferredLanguage: form.preferredLanguage,
+      // workspaceCode: form.workspaceCode,
     }
 
     if (form.role === "CONTRACTOR" || form.role === "MANAGER") {
@@ -332,6 +414,53 @@ export default function ProfilePage() {
         ? previous.filter((entry) => entry !== contractorId)
         : [...previous, contractorId]
     )
+  }
+
+  const handleChangeWorkspaceCode = async () => {
+    const normalizedCode = partnerWorkspaceCode.trim().toUpperCase()
+    const isDriver = form?.role === "DRIVER"
+    const partnerLabel = isDriver ? "Auftragnehmer" : "None"
+    if (!normalizedCode) {
+      setPartnerMessage(t("workspaceCode") || "Workspace code")
+      setPartnerMessageType("error")
+      return
+    }
+
+    setError("")
+    setSuccess("")
+    setPartnerMessage("")
+    setPartnerMessageType(null)
+    setPartnerAddLoading(true)
+
+    try {
+      const response = await fetch("/api/contractor-partners", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceCode: normalizedCode }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok) {
+        setPartnerMessage(payload.error || `Ungültiger ${partnerLabel}-Code`)
+        setPartnerMessageType("error")
+        return
+      }
+
+      setSuccess(`${partnerLabel} hinzugefügt`)
+      setPartnerMessage(`${partnerLabel} hinzugefügt`)
+      setPartnerMessageType("success")
+      setPartnerWorkspaceCode("")
+      if (form?.role === "DRIVER") {
+        await loadManagerPartners()
+      } else {
+        await loadContractorPartners()
+      }
+    } catch (requestError) {
+      setPartnerMessage(requestError instanceof Error ? requestError.message : `Ungültiger ${partnerLabel}-Code`)
+      setPartnerMessageType("error")
+    } finally {
+      setPartnerAddLoading(false)
+    }
   }
 
   const handleAddPartnerByCode = async () => {
@@ -799,27 +928,161 @@ export default function ProfilePage() {
                   <p className="text-sm text-slate-500 dark:text-slate-400">{t("none")}</p>
                 ) : (
                   <div className="space-y-2">
-                    {partnerManagers.map((manager) => (
-                      <div key={manager.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
-                        <label className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedPartnerManagerIds.includes(manager.id)}
-                            onChange={() => togglePartnerManager(manager.id)}
-                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <span>{manager.name}</span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveContractorSubcontractor(manager.id)}
-                          disabled={partnerRemoveLoadingId === manager.id}
-                          className="text-xs font-medium text-red-600 hover:text-red-700 disabled:text-red-300"
+                    {partnerManagers.map((manager) => {
+                      const isExpanded = expandedPartnerId === manager.id
+
+                      return (
+                        <div
+                          key={manager.id}
+                          className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden"
                         >
-                          {partnerRemoveLoadingId === manager.id ? (t("saving") || "Speichern...") : "Entfernen"}
-                        </button>
-                      </div>
-                    ))}
+                          <div className="flex items-center justify-between gap-3 px-3 py-3">
+                            <label className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedPartnerManagerIds.includes(manager.id)}
+                                onChange={() => togglePartnerManager(manager.id)}
+                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              />
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedPartnerId(isExpanded ? null : manager.id)
+                                }
+                                className="text-left"
+                              >
+                                <span className="font-medium text-slate-900 dark:text-white">
+                                  {manager.name}
+                                </span>
+
+                                {manager.companyName && (
+                                  <span className="block text-xs text-slate-500 dark:text-slate-400">
+                                    {manager.companyName}
+                                  </span>
+                                )}
+                              </button>
+                            </label>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedPartnerId(isExpanded ? null : manager.id)
+                              }
+                              className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                            >
+                              {isExpanded ? "Weniger" : "Details"}
+                            </button>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-4 space-y-3">
+                              {manager.companyName && (
+                                <div>
+                                  <p className="text-xs text-slate-500">Unternehmen</p>
+                                  <p className="text-sm font-medium text-slate-900 dark:text-white">
+                                    {manager.companyName}
+                                  </p>
+                                </div>
+                              )}
+
+                              <div>
+                                <p className="text-xs text-slate-500">Ansprechpartner</p>
+                                <p className="text-sm text-slate-700 dark:text-slate-300">
+                                  {manager.name}
+                                </p>
+                              </div>
+
+                              {manager.email && (
+                                <div>
+                                  <p className="text-xs text-slate-500">E-Mail</p>
+                                  <a
+                                    href={`mailto:${manager.email}`}
+                                    className="text-sm text-blue-600 hover:underline"
+                                  >
+                                    {manager.email}
+                                  </a>
+                                </div>
+                              )}
+
+                              {manager.phoneNumber && (
+                                <div>
+                                  <p className="text-xs text-slate-500">Telefon</p>
+                                  <a
+                                    href={`tel:${manager.phoneNumber}`}
+                                    className="text-sm text-blue-600 hover:underline"
+                                  >
+                                    {manager.phoneNumber}
+                                  </a>
+                                </div>
+                              )}
+
+                              {(manager.companyStreet || manager.companyCity) && (
+                                <div>
+                                  <p className="text-xs text-slate-500">Adresse</p>
+
+                                  {manager.companyStreet && (
+                                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                                      {manager.companyStreet} {manager.companyHouseNumber}
+                                    </p>
+                                  )}
+
+                                  {(manager.companyPostalCode || manager.companyCity) && (
+                                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                                      {manager.companyPostalCode} {manager.companyCity}
+                                    </p>
+                                  )}
+
+                                  {manager.companyCountry && (
+                                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                                      {manager.companyCountry}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {manager.billingEmail && (
+                                <div>
+                                  <p className="text-xs text-slate-500">Rechnungs-E-Mail</p>
+                                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                                    {manager.billingEmail}
+                                  </p>
+                                </div>
+                              )}
+
+                              {manager.vatId && (
+                                <div>
+                                  <p className="text-xs text-slate-500">USt-IdNr.</p>
+                                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                                    {manager.vatId}
+                                  </p>
+                                </div>
+                              )}
+
+                              {manager.taxNumber && (
+                                <div>
+                                  <p className="text-xs text-slate-500">Steuernummer</p>
+                                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                                    {manager.taxNumber}
+                                  </p>
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveContractorSubcontractor(manager.id)}
+                                disabled={partnerRemoveLoadingId === manager.id}
+                                className="text-xs font-medium text-red-600 hover:text-red-700 disabled:text-red-300"
+                              >
+                                {partnerRemoveLoadingId === manager.id
+                                  ? "Speichern..."
+                                  : "Auftragnehmer entfernen"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -980,6 +1243,97 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {form.role === "DRIVER" && (
+              <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                  Arbeitgeber
+                </h2>
+
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                  Unternehmen, dem du als Fahrer zugeordnet bist.
+                </p>
+
+                {form.workspace?.manager ? (
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+
+                    {/* Company */}
+                    <div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Unternehmen
+                      </p>
+
+                      <p className="text-base font-semibold text-slate-900 dark:text-white">
+                        {form.workspace.manager.companyName || form.workspace.name}
+                      </p>
+                    </div>
+
+                    {/* Contact */}
+                    <div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Ansprechpartner
+                      </p>
+
+                      <p className="text-sm text-slate-700 dark:text-slate-300">
+                        {form.workspace.manager.name}
+                      </p>
+
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        {form.workspace.manager.email}
+                      </p>
+                    </div>
+
+                    {/* Address */}
+                    {(form.workspace.manager.companyStreet ||
+                      form.workspace.manager.companyCity) && (
+                      <div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                          Adresse
+                        </p>
+
+                        {form.workspace.manager.companyStreet && (
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {form.workspace.manager.companyStreet}{" "}
+                            {form.workspace.manager.companyHouseNumber}
+                          </p>
+                        )}
+
+                        {(form.workspace.manager.companyPostalCode ||
+                          form.workspace.manager.companyCity) && (
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {form.workspace.manager.companyPostalCode}{" "}
+                            {form.workspace.manager.companyCity}
+                          </p>
+                        )}
+
+                        {form.workspace.manager.companyCountry && (
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {form.workspace.manager.companyCountry}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Workspace */}
+                    <div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Workspace
+                      </p>
+
+                      <p className="text-sm text-slate-700 dark:text-slate-300">
+                        {form.workspace.code}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      Du bist derzeit keinem Unternehmen zugeordnet.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

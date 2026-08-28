@@ -155,7 +155,7 @@ export default async function DashboardPage() {
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{t("totalRevenue")}</p>
             <p className="mt-2 text-4xl font-bold text-green-600 dark:text-green-400">
-              €{totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              {totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2 })} €
             </p>
           </div>
         )}

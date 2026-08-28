@@ -21,7 +21,9 @@ export async function GET() {
         email: true,
         phoneNumber: true,
         preferredLanguage: true,
+        workspaceId: true,
         role: true,
+
         companyName: true,
         companyStreet: true,
         companyHouseNumber: true,
@@ -37,6 +39,27 @@ export async function GET() {
         bic: true,
         invoiceEmailSubject: true,
         invoiceEmailBody: true,
+
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            manager: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                companyName: true,
+                companyStreet: true,
+                companyHouseNumber: true,
+                companyPostalCode: true,
+                companyCity: true,
+                companyCountry: true,
+              },
+            },
+          },
+        },
       },
     })
 
@@ -44,6 +67,7 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
+    //return NextResponse.json({user, workspaceId: user.workspaceId ?? ""})
     return NextResponse.json(user)
   } catch (error) {
     console.error("Profile GET error:", error)
@@ -80,6 +104,7 @@ export async function PUT(req: Request) {
       newPassword,
       invoiceEmailSubject,
       invoiceEmailBody,
+      workspaceId
     } = await req.json() as Record<string, string | null | undefined>
 
     const user = await prisma.user.findUnique({

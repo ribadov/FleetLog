@@ -23,8 +23,28 @@ export async function GET() {
 
     const contractors = selectedContractorIds.length
       ? await prisma.user.findMany({
-          where: { id: { in: selectedContractorIds }, role: "CONTRACTOR" },
-          select: { id: true, name: true, workspaceId: true },
+          where: {
+            id: { in: selectedContractorIds },
+            role: "CONTRACTOR",
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phoneNumber: true,
+            workspaceId: true,
+
+            companyName: true,
+            companyStreet: true,
+            companyHouseNumber: true,
+            companyPostalCode: true,
+            companyCity: true,
+            companyCountry: true,
+
+            billingEmail: true,
+            vatId: true,
+            taxNumber: true,
+          },
           orderBy: { name: "asc" },
         })
       : []
@@ -36,8 +56,28 @@ export async function GET() {
 
   const managers = selectedManagerIds.length
     ? await prisma.user.findMany({
-        where: { id: { in: selectedManagerIds }, role: "MANAGER" },
-        select: { id: true, name: true, workspaceId: true },
+        where: {
+          id: { in: selectedManagerIds },
+          role: "MANAGER",
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phoneNumber: true,
+          workspaceId: true,
+
+          companyName: true,
+          companyStreet: true,
+          companyHouseNumber: true,
+          companyPostalCode: true,
+          companyCity: true,
+          companyCountry: true,
+
+          billingEmail: true,
+          vatId: true,
+          taxNumber: true,
+        },
         orderBy: { name: "asc" },
       })
     : []

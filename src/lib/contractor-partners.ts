@@ -5,64 +5,90 @@ export function hasContractorPartnerModel(): boolean {
 }
 
 export async function listAssignedManagerIds(contractorId: string): Promise<string[]> {
-  const rows = await prisma.$queryRaw<Array<{ managerId: string }>>`
-    SELECT "managerId"
-    FROM "ContractorPartnerAssignment"
-    WHERE "contractorId" = ${contractorId}
-  `
+  const rows = await prisma.contractorPartnerAssignment.findMany({
+    where: {
+      contractorId,
+    },
+    select: {
+      managerId: true,
+    },
+  })
 
   return rows.map((row) => row.managerId)
 }
 
 export async function listAssignedContractorIds(managerId: string): Promise<string[]> {
-  const rows = await prisma.$queryRaw<Array<{ contractorId: string }>>`
-    SELECT "contractorId"
-    FROM "ContractorPartnerAssignment"
-    WHERE "managerId" = ${managerId}
-  `
+  const rows = await prisma.contractorPartnerAssignment.findMany({
+    where: {
+      managerId,
+    },
+    select: {
+      contractorId: true,
+    },
+  })
 
   return rows.map((row) => row.contractorId)
 }
 
-export async function isManagerAssignedToContractor(contractorId: string, managerId: string): Promise<boolean> {
-  const rows = await prisma.$queryRaw<Array<{ count: number }>>`
-    SELECT COUNT(*) as count
-    FROM "ContractorPartnerAssignment"
-    WHERE "contractorId" = ${contractorId}
-      AND "managerId" = ${managerId}
-  `
+export async function isManagerAssignedToContractor(
+  contractorId: string,
+  managerId: string,
+): Promise<boolean> {
+  const assignment = await prisma.contractorPartnerAssignment.findUnique({
+    where: {
+      contractorId_managerId: {
+        contractorId,
+        managerId,
+      },
+    },
+    select: {
+      id: true,
+    },
+  })
 
-  return Number(rows[0]?.count ?? 0) > 0
+  return Boolean(assignment)
 }
 
-export async function replaceAssignedManagers(contractorId: string, managerIds: string[]): Promise<void> {
+export async function replaceAssignedManagers(
+  contractorId: string,
+  managerIds: string[],
+): Promise<void> {
   await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`
-      DELETE FROM "ContractorPartnerAssignment"
-      WHERE "contractorId" = ${contractorId}
-    `
+    await tx.contractorPartnerAssignment.deleteMany({
+      where: {
+        contractorId,
+      },
+    })
 
     for (const managerId of managerIds) {
-      await tx.$executeRaw`
-        INSERT OR IGNORE INTO "ContractorPartnerAssignment" ("id", "contractorId", "managerId", "createdAt")
-        VALUES (lower(hex(randomblob(12))), ${contractorId}, ${managerId}, CURRENT_TIMESTAMP)
-      `
+      await tx.contractorPartnerAssignment.create({
+        data: {
+          contractorId,
+          managerId,
+        },
+      })
     }
   })
 }
 
-export async function replaceAssignedContractors(managerId: string, contractorIds: string[]): Promise<void> {
+export async function replaceAssignedContractors(
+  managerId: string,
+  contractorIds: string[],
+): Promise<void> {
   await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`
-      DELETE FROM "ContractorPartnerAssignment"
-      WHERE "managerId" = ${managerId}
-    `
+    await tx.contractorPartnerAssignment.deleteMany({
+      where: {
+        managerId,
+      },
+    })
 
     for (const contractorId of contractorIds) {
-      await tx.$executeRaw`
-        INSERT OR IGNORE INTO "ContractorPartnerAssignment" ("id", "contractorId", "managerId", "createdAt")
-        VALUES (lower(hex(randomblob(12))), ${contractorId}, ${managerId}, CURRENT_TIMESTAMP)
-      `
+      await tx.contractorPartnerAssignment.create({
+        data: {
+          contractorId,
+          managerId,
+        },
+      })
     }
   })
 }

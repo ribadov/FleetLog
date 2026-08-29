@@ -1,4 +1,3 @@
-import fs from "node:fs"
 import { chromium } from "playwright"
 
 type BuildInvoicePrintPdfParams = {
@@ -6,24 +5,6 @@ type BuildInvoicePrintPdfParams = {
   appUrl: string
   cookieHeader?: string
   footerHtml?: string
-}
-
-function resolveBrowserExecutablePath() {
-  const fromEnv = process.env.CHROMIUM_PATH || process.env.PLAYWRIGHT_CHROMIUM_PATH
-  if (fromEnv && fs.existsSync(fromEnv)) {
-    return fromEnv
-  }
-
-  const candidates = [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium",
-  ]
-
-  return candidates.find((path) => fs.existsSync(path))
 }
 
 export async function buildInvoicePrintPdf({

@@ -7,7 +7,7 @@
     "prisma:generate": "prisma generate",
     "predev": "npm run prisma:generate",
     "dev": "next dev",
-    "prebuild": "npm run db:prepare && npm run prisma:generate",
+    "prebuild": "npm run prisma:generate",
     "build": "next build",
     "prestart": "npm run db:prepare && npm run prisma:generate",
     "start": "next start -H 0.0.0.0 -p $PORT",

@@ -410,7 +410,7 @@ export default function TransportsTable({ transports: initial, role, userId, sho
                           </td>
                           {showPrice && (
                             <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                              {transport.price != null ? `€${transport.price.toFixed(2)}` : "—"}
+                              {transport.price != null ? `${transport.price.toFixed(2)} €` : "—"}
                             </td>
                           )}
                           <td className="px-4 py-3 whitespace-nowrap">

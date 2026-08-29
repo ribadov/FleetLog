@@ -102,7 +102,7 @@ export default async function InvoicesPage() {
                         <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{contractor.name}</td>
                         <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{contractor.email}</td>
                         <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{item._count._all}</td>
-                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">€{(item._sum.price ?? 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{(item._sum.price ?? 0).toFixed(2)} €</td>
                         <td className="px-4 py-3">
                           <CreateInvoiceForContractorButton contractorId={item.contractorId} locale={locale} />
                         </td>
@@ -147,7 +147,7 @@ export default async function InvoicesPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{invoice.contractor.name}</td>
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{invoice.itemsCount}</td>
-                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">€{invoice.totalAmount.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{invoice.totalAmount.toFixed(2)} €</td>
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
                       {invoice.sentAt ? (
                         <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded">

@@ -193,7 +193,7 @@ export default function DashboardStatsPanel({ role, nowIso, transports }: Props)
               <div key={row.name} className="flex items-center justify-between text-sm">
                 <span className="text-slate-700 dark:text-slate-300">{row.name}</span>
                 <span className="font-semibold text-slate-900 dark:text-white">
-                  €{row.revenue.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {row.revenue.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                 </span>
               </div>
             ))}

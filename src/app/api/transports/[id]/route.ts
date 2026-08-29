@@ -348,12 +348,60 @@ export async function PUT(req: Request, { params }: Params) {
       updateData.price = transport.basePrice + transport.waitingSurcharge + imoSurcharge
     }
 
+    if (date !== undefined) {
+      updateData.date = new Date(date)
+    }
+
+    if (containerNumber !== undefined) {
+      updateData.containerNumber = containerNumber
+    }
+
+    if (orderNumber !== undefined) {
+      updateData.orderNumber = orderNumber
+    }
+
+    if (fromPlace !== undefined) {
+      updateData.fromPlace = fromPlace
+    }
+
+    if (toPlace !== undefined) {
+      updateData.toPlace = toPlace
+    }
+
     if (containerSize) {
       updateData.containerSize = containerSize
     }
 
     if (isIMO !== undefined) {
       updateData.isIMO = isIMO
+    }
+
+    if (waitingFrom !== undefined) {
+      updateData.waitingFrom = waitingFrom
+    }
+
+    if (waitingTo !== undefined) {
+      updateData.waitingTo = waitingTo
+    }
+
+    if (price !== undefined && canEditPrice) {
+      updateData.price = price
+    }
+
+    if (driverId !== undefined) {
+      updateData.driverId = nextDriverId
+    }
+
+    if (contractorId !== undefined) {
+      updateData.contractorId = nextContractorId
+    }
+
+    if (sellerId !== undefined) {
+      updateData.sellerId = nextSellerId
+    }
+
+    if (notes !== undefined) {
+      updateData.notes = notes || null
     }
 
     const updated = await prisma.$transaction(async (tx) => {

@@ -1,5 +1,5 @@
 import fs from "node:fs"
-import { chromium } from "playwright-core"
+import { chromium } from "playwright"
 
 type BuildInvoicePrintPdfParams = {
   invoiceId: string
@@ -26,26 +26,31 @@ function resolveBrowserExecutablePath() {
   return candidates.find((path) => fs.existsSync(path))
 }
 
-export async function buildInvoicePrintPdf({ invoiceId, appUrl, cookieHeader, footerHtml }: BuildInvoicePrintPdfParams) {
-  const executablePath = resolveBrowserExecutablePath()
-  if (!executablePath) {
-    throw new Error("No Chromium executable found. Please set CHROMIUM_PATH.")
-  }
-
+export async function buildInvoicePrintPdf({
+  invoiceId,
+  appUrl,
+  cookieHeader,
+  footerHtml,
+}: BuildInvoicePrintPdfParams) {
   const browser = await chromium.launch({
-    executablePath,
     headless: true,
   })
 
   try {
     const context = await browser.newContext({
-      extraHTTPHeaders: cookieHeader ? { cookie: cookieHeader } : undefined,
+      extraHTTPHeaders: cookieHeader
+        ? { cookie: cookieHeader }
+        : undefined,
     })
 
     const page = await context.newPage()
-    await page.goto(`${appUrl.replace(/\/$/, "")}/invoices/${invoiceId}`, {
-      waitUntil: "networkidle",
-    })
+
+    await page.goto(
+      `${appUrl.replace(/\/$/, "")}/invoices/${invoiceId}`,
+      {
+        waitUntil: "networkidle",
+      }
+    )
 
     await page.emulateMedia({ media: "print" })
 
@@ -65,6 +70,7 @@ export async function buildInvoicePrintPdf({ invoiceId, appUrl, cookieHeader, fo
     })
 
     await context.close()
+
     return Buffer.from(pdf)
   } finally {
     await browser.close()

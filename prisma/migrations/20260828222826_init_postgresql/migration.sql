@@ -80,8 +80,8 @@ CREATE TABLE "Invoice" (
 CREATE TABLE "Transport" (
     "id" TEXT NOT NULL,
     "date" TIMESTAMP(3) NOT NULL,
+    "containerNumber" TEXT,
     "orderNumber" TEXT,
-    "jobNumber" TEXT,
     "fromPlace" TEXT NOT NULL,
     "toPlace" TEXT NOT NULL,
     "containerSize" "ContainerSize" NOT NULL,

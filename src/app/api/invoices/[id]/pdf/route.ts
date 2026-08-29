@@ -41,8 +41,9 @@ export async function GET(req: Request, { params }: Params) {
           orderBy: { date: "asc" },
           select: {
             date: true,
+            containerNumber: true,
             orderNumber: true,
-            jobNumber: true,
+            // jobNumber: true,
             containerSize: true,
             fromPlace: true,
             toPlace: true,
@@ -69,8 +70,9 @@ export async function GET(req: Request, { params }: Params) {
             orderBy: { date: "asc" },
             select: {
               date: true,
+              containerNumber: true,
               orderNumber: true,
-              jobNumber: true,
+              // jobNumber: true,
               containerSize: true,
               fromPlace: true,
               toPlace: true,

@@ -232,7 +232,7 @@ export default function NewTransportForm({ users, places, currentUserId, current
             />
           </div>
           <div>
-            <label htmlFor="orderNumber" className={labelClass}>{t("orderNumber")}</label>
+            <label htmlFor="orderNumber" className={labelClass}>{t("orderNumber")} *</label>
             <input
               id="orderNumber"
               name="orderNumber"

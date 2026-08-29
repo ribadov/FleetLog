@@ -12,8 +12,9 @@ type Seller = { id: string; name: string };
 export type TransportRow = {
   id: string;
   date: string;
+  containerNumber: string | null;
   orderNumber: string | null;
-  jobNumber?: string | null;
+  // jobNumber: string | null;
   fromPlace: string;
   toPlace: string;
   containerSize: string;
@@ -130,8 +131,9 @@ export default function TransportsTable({ transports: initial, role, userId, sho
 
       if (query) {
         const haystack = [
+          transport.containerNumber ?? "",
           transport.orderNumber ?? "",
-          transport.jobNumber ?? "",
+          // transport.jobNumber ?? "",
           transport.fromPlace,
           transport.toPlace,
           transport.driver?.name ?? "",
@@ -375,8 +377,8 @@ export default function TransportsTable({ transports: initial, role, userId, sho
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">
                             {new Date(transport.date).toLocaleDateString()}
                           </td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">{transport.containerNumber ?? "—"}</td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">{transport.orderNumber ?? "—"}</td>
-                          <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">{transport.jobNumber ?? "—"}</td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{transport.fromPlace}</td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{transport.toPlace}</td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{containerLabel(transport.containerSize)}</td>

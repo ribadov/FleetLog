@@ -1,5 +1,6 @@
 -- AlterTable
 ALTER TABLE "Transport" ADD COLUMN "freightLetterPath" TEXT;
+ALTER TABLE "Transport" ADD COLUMN "containerNumber" TEXT;
 ALTER TABLE "Transport" ADD COLUMN "orderNumber" TEXT;
 
 -- AlterTable

@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE "Transport" ADD COLUMN "jobNumber" TEXT;
+-- ALTER TABLE "Transport" ADD COLUMN "jobNumber" TEXT;
 ALTER TABLE "Transport" ADD COLUMN "imoSurcharge" REAL NOT NULL DEFAULT 0;
 
 -- CreateTable

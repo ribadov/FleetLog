@@ -33,8 +33,8 @@ function formatContainerNumber(index) {
   return `CTNR${(index + 1).toString().padStart(6, "0")}`;
 }
 
-function formatJobNumber(index) {
-  return `JOB-${(index + 1).toString().padStart(4, "0")}`;
+function formatOrderNumber(index) {
+  return `ORDR-${(index + 1).toString().padStart(4, "0")}`;
 }
 
 function calculateWaitingMinutes(waitingFrom, waitingTo) {
@@ -192,8 +192,8 @@ async function main() {
     const imoSurcharge = calculateImoSurcharge(anyLegIsIMO);
     const price = legsData.reduce((sum, leg) => sum + leg.totalPrice, 0) + imoSurcharge;
 
-    const orderNumber = formatContainerNumber(index);
-    const jobNumber = formatJobNumber(index);
+    const containerNumber = formatContainerNumber(index);
+    const orderNumber = formatOrderNumber(index);
 
     const notes = anyLegIsIMO
       ? "Teilweise ADR / IMO-Fracht"
@@ -202,8 +202,8 @@ async function main() {
     const created = await prisma.transport.create({
       data: {
         date,
+        containerNumber,
         orderNumber,
-        jobNumber,
         fromPlace: legsData[0].fromPlace,
         toPlace: legsData[legsData.length - 1].toPlace,
         containerSize: "SIZE_40",
@@ -226,7 +226,7 @@ async function main() {
       },
     });
 
-    console.log(`Transport ${index + 1}/40 angelegt:`, created.id, orderNumber, jobNumber);
+    console.log(`Transport ${index + 1}/40 angelegt:`, created.id, containerNumber, orderNumber);
   }
 
   console.log("Fertig: 40 Transports für Ramiz Ibadov / Firma1 erzeugt.");

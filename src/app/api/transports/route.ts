@@ -86,7 +86,7 @@ export async function POST(req: Request) {
       date,
       containerNumber,
       orderNumber,
-      jobNumber,
+      // jobNumber,
       fromPlace,
       toPlace,
       containerSize,
@@ -101,19 +101,21 @@ export async function POST(req: Request) {
       legs,
     } = body
 
-    const normalizedContainerNumber = typeof containerNumber === "string"
-      ? containerNumber.trim()
-      : typeof orderNumber === "string"
-        ? orderNumber.trim()
-        : ""
-    if (!normalizedContainerNumber) {
-      return NextResponse.json(
-        { error: "Container number is required" },
-        { status: 400 }
-      )
-    }
+    // const normalizedContainerNumber = typeof containerNumber === "string"
+    //   ? containerNumber.trim()
+    //   : typeof orderNumber === "string"
+    //     ? orderNumber.trim()
+    //     : ""
+    // if (!normalizedContainerNumber) {
+    //   return NextResponse.json(
+    //     { error: "Container number is required" },
+    //     { status: 400 }
+    //   )
+    // }
 
-    const normalizedJobNumber = typeof jobNumber === "string" ? jobNumber.trim() : ""
+    // const normalizedOrderNumber = typeof orderNumber === "string" ? orderNumber.trim() : ""
+
+    // const normalizedJobNumber = typeof jobNumber === "string" ? jobNumber.trim() : ""
 
     if (!date || !containerSize || !driverId) {
       return NextResponse.json(
@@ -367,8 +369,9 @@ export async function POST(req: Request) {
       data: {
         workspaceId: targetWorkspaceId,
         date: new Date(date),
-        orderNumber: normalizedContainerNumber,
-        jobNumber: normalizedJobNumber || null,
+        containerNumber: containerNumber || null,
+        orderNumber: orderNumber || null,
+        //jobNumber: normalizedJobNumber || null,
         fromPlace: firstLeg.fromPlace,
         toPlace: lastLeg.toPlace,
         containerSize,

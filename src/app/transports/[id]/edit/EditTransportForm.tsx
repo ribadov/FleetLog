@@ -21,8 +21,9 @@ type PartnerContractorPayload = {
 type Transport = {
   id: string;
   date: string;
+  containerNumber: string | null;
   orderNumber: string | null;
-  jobNumber?: string | null;
+  // jobNumber?: string | null;
   fromPlace: string;
   toPlace: string;
   containerSize: string;
@@ -66,8 +67,9 @@ export default function EditTransportForm({ transport, users, places, role, allo
 
   const [form, setForm] = useState({
     date: transport.date.slice(0, 10),
-    containerNumber: transport.orderNumber ?? "",
-    orderNumber: transport.jobNumber ?? "",
+    containerNumber: transport.containerNumber ?? "",
+    orderNumber: transport.orderNumber ?? "",
+    // jobNumber: transport.jobNumber ?? "",
     containerSize: transport.containerSize,
     driverId: transport.driverId,
     contractorId: transport.contractorId ?? "",
@@ -203,7 +205,8 @@ export default function EditTransportForm({ transport, users, places, role, allo
     const body = {
       date: form.date,
       containerNumber: form.containerNumber,
-      jobNumber: form.orderNumber,
+      orderNumber: form.orderNumber,
+      // jobNumber: form.jobNumber,
       containerSize: form.containerSize,
       driverId: form.driverId,
       contractorId: selectedContractorId || null,
@@ -286,7 +289,7 @@ export default function EditTransportForm({ transport, users, places, role, allo
             />
           </div>
           <div>
-            <label htmlFor="orderNumber" className={labelClass}>{t("orderNumber")}</label>
+            <label htmlFor="orderNumber" className={labelClass}>{t("orderNumber")} *</label>
             <input
               id="orderNumber"
               name="orderNumber"

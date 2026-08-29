@@ -2,8 +2,9 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 
 type InvoiceTransport = {
   date: Date
+  containerNumber: string | null
   orderNumber: string | null
-  jobNumber: string | null
+  // jobNumber: string | null
   containerSize: string
   fromPlace: string
   toPlace: string
@@ -200,14 +201,14 @@ export async function buildInvoicePdfBuffer(params: InvoicePdfParams) {
 
     const note = transport.notes ? transport.notes : transport.isIMO ? "ADR / IMO" : "-"
 
-    drawText(page, fontRegular, formatDate(new Date(transport.date)), 30, y, 7)
-    drawText(page, fontRegular, compact(transport.orderNumber), 80, y, 7)
-    drawText(page, fontRegular, compact(transport.jobNumber), 145, y, 7)
-    drawText(page, fontRegular, containerLabel(transport.containerSize), 205, y, 7)
-    drawText(page, fontRegular, compact(transport.fromPlace), 250, y, 7)
-    drawText(page, fontRegular, compact(transport.toPlace), 330, y, 7)
-    drawText(page, fontRegular, compact(note), 410, y, 7)
-    drawText(page, fontRegular, formatCurrency(transport.price), 525, y, 7)
+    drawText(page, fontRegular, formatDate(new Date(transport.date)), 30, y, 8)
+    drawText(page, fontRegular, compact(transport.containerNumber), 80, y, 8)
+    drawText(page, fontRegular, compact(transport.orderNumber), 145, y, 8)
+    drawText(page, fontRegular, containerLabel(transport.containerSize), 205, y, 8)
+    drawText(page, fontRegular, compact(transport.fromPlace), 250, y, 8)
+    drawText(page, fontRegular, compact(transport.toPlace), 330, y, 8)
+    drawText(page, fontRegular, compact(note), 410, y, 8)
+    drawText(page, fontRegular, formatCurrency(transport.price), 525, y, 8)
 
     y -= 10
   }

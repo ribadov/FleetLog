@@ -314,10 +314,10 @@ export default async function InvoiceDetailPage({ params }: Params) {
                                   {formatDate(new Date(transport.date))}
                                 </td>
                                 <td className="px-3 py-2 print:px-1 print:py-1 text-slate-700 dark:text-slate-300 leading-tight whitespace-normal break-words">
-                                  {transport.orderNumber ?? "—"}
+                                  {transport.containerNumber ?? "—"}
                                 </td>
                                 <td className="px-3 py-2 print:px-1 print:py-1 text-slate-700 dark:text-slate-300 leading-tight whitespace-normal break-words">
-                                  {transport.jobNumber ?? "—"}
+                                  {transport.orderNumber ?? "—"}
                                 </td>
                               </>
                             )}

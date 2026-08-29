@@ -118,8 +118,8 @@ model Invoice {
 model Transport {
   id              String        @id @default(cuid())
   date            DateTime
+  containerNumber String?
   orderNumber     String?
-  jobNumber       String?
   fromPlace       String
   toPlace         String
   containerSize   ContainerSize

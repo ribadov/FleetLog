@@ -97,7 +97,7 @@ export async function PUT(req: Request, { params }: Params) {
       date,
       containerNumber,
       orderNumber,
-      jobNumber,
+      // jobNumber,
       fromPlace,
       toPlace,
       containerSize,
@@ -114,11 +114,19 @@ export async function PUT(req: Request, { params }: Params) {
 
     const canEditPrice = session.user.role === "MANAGER" || session.user.role === "CONTRACTOR"
 
-    const hasContainerNumberInput = containerNumber !== undefined
-    const hasLegacyContainerInput = containerNumber === undefined && orderNumber !== undefined
+    // const hasContainerNumberInput = containerNumber !== undefined
+    // const hasLegacyContainerInput = containerNumber === undefined && orderNumber !== undefined
 
-    if (!hasContainerNumberInput && !hasLegacyContainerInput && !transport.orderNumber) {
-      return NextResponse.json({ error: "Container number is required" }, { status: 400 })
+    // if (!hasContainerNumberInput && !hasLegacyContainerInput && !transport.orderNumber) {
+    //   return NextResponse.json({ error: "Container number is required" }, { status: 400 })
+    // }
+
+    if (containerNumber !== undefined && typeof containerNumber !== "string") {
+      return NextResponse.json({ error: "Container number must be a string" }, { status: 400 })
+    }
+
+    if (orderNumber !== undefined && typeof orderNumber !== "string") {
+      return NextResponse.json({ error: "Order number must be a string" }, { status: 400 })
     }
 
     let nextContractorId = contractorId !== undefined ? contractorId || null : transport.contractorId
@@ -298,24 +306,24 @@ export async function PUT(req: Request, { params }: Params) {
       ...(session.user.role !== "DRIVER" && driverId && { driverId: nextDriverId }),
     }
 
-    if (hasContainerNumberInput) {
-      const normalizedContainerNumber = typeof containerNumber === "string" ? containerNumber.trim() : ""
-      if (!normalizedContainerNumber) {
-        return NextResponse.json({ error: "Container number is required" }, { status: 400 })
-      }
-      updateData.orderNumber = normalizedContainerNumber
-    } else if (hasLegacyContainerInput) {
-      const normalizedContainerNumber = typeof orderNumber === "string" ? orderNumber.trim() : ""
-      if (!normalizedContainerNumber) {
-        return NextResponse.json({ error: "Container number is required" }, { status: 400 })
-      }
-      updateData.orderNumber = normalizedContainerNumber
-    }
+    // if (hasContainerNumberInput) {
+    //   const normalizedContainerNumber = typeof containerNumber === "string" ? containerNumber.trim() : ""
+    //   if (!normalizedContainerNumber) {
+    //     return NextResponse.json({ error: "Container number is required" }, { status: 400 })
+    //   }
+    //   updateData.containerNumber = normalizedContainerNumber
+    // } else if (hasLegacyContainerInput) {
+    //   const normalizedContainerNumber = typeof orderNumber === "string" ? orderNumber.trim() : ""
+    //   if (!normalizedContainerNumber) {
+    //     return NextResponse.json({ error: "Container number is required" }, { status: 400 })
+    //   }
+    //   updateData.containerNumber = normalizedContainerNumber
+    // }
 
-    if (jobNumber !== undefined) {
-      const normalizedJobNumber = typeof jobNumber === "string" ? jobNumber.trim() : ""
-      updateData.jobNumber = normalizedJobNumber || null
-    }
+    // if (jobNumber !== undefined) {
+    //   const normalizedJobNumber = typeof jobNumber === "string" ? jobNumber.trim() : ""
+    //   updateData.jobNumber = normalizedJobNumber || null
+    // }
 
     if (preparedLegs) {
       const firstLeg = preparedLegs[0]

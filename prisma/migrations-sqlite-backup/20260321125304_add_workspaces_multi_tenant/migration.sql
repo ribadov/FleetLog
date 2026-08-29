@@ -47,6 +47,7 @@ CREATE UNIQUE INDEX "Place_workspaceId_name_key" ON "Place"("workspaceId", "name
 CREATE TABLE "new_Transport" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "date" DATETIME NOT NULL,
+    "containerNumber" TEXT,
     "orderNumber" TEXT,
     "fromPlace" TEXT NOT NULL,
     "toPlace" TEXT NOT NULL,
@@ -70,7 +71,7 @@ CREATE TABLE "new_Transport" (
     CONSTRAINT "Transport_sellerId_fkey" FOREIGN KEY ("sellerId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Transport_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
-INSERT INTO "new_Transport" ("containerSize", "contractorId", "createdAt", "date", "driverId", "freightLetterPath", "fromPlace", "id", "invoiceId", "isIMO", "notes", "orderNumber", "price", "sellerId", "toPlace", "updatedAt", "waitingFrom", "waitingTo") SELECT "containerSize", "contractorId", "createdAt", "date", "driverId", "freightLetterPath", "fromPlace", "id", "invoiceId", "isIMO", "notes", "orderNumber", "price", "sellerId", "toPlace", "updatedAt", "waitingFrom", "waitingTo" FROM "Transport";
+INSERT INTO "new_Transport" ("containerSize", "contractorId", "createdAt", "date", "driverId", "freightLetterPath", "fromPlace", "id", "invoiceId", "isIMO", "notes", "containerNumber", "orderNumber", "price", "sellerId", "toPlace", "updatedAt", "waitingFrom", "waitingTo") SELECT "containerSize", "contractorId", "createdAt", "date", "driverId", "freightLetterPath", "fromPlace", "id", "invoiceId", "isIMO", "notes", "containerNumber", "orderNumber", "price", "sellerId", "toPlace", "updatedAt", "waitingFrom", "waitingTo" FROM "Transport";
 DROP TABLE "Transport";
 ALTER TABLE "new_Transport" RENAME TO "Transport";
 CREATE TABLE "new_User" (

@@ -13,7 +13,7 @@ export function PrintPageNumbers() {
             size: A4;
             margin: 2cm 1cm 2.5cm 1cm;
 
-            @bottom-middle {
+            @top-right {
               content: "S. " counter(page) " / " counter(pages);
               font-size: 8pt;
               color: #777;

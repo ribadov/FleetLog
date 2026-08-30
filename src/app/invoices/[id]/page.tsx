@@ -395,7 +395,7 @@ export default async function InvoiceDetailPage({ params }: Params) {
 
       <div className="print-card bg-white dark:bg-slate-800 rounded-xl shadow p-6 mt-6 text-sm text-slate-700 dark:text-slate-300">
         <p>
-          Zahlung spätestens zum {dueDate ? formatDate(dueDate) : "—"} ohne Abzüge.
+          Zahlung spätestens zum {dueDate ? formatDate(dueDate) : "—"} ohne Abzuege auf unten angegebene Bankverbindung.
         </p>
         <p className="mt-2">Mit freundlichen Grüßen</p>
         <p className="font-semibold mt-1">{senderProfile?.companyName ?? invoice.sentBy?.name ?? "—"}</p>

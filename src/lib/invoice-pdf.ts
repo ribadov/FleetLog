@@ -229,7 +229,7 @@ export async function buildInvoicePdfBuffer(params: InvoicePdfParams) {
   drawText(page, fontBold, `Rechnungsbetrag: ${formatCurrency(grossTotal)}`, 360, y, 11, true)
 
   y -= 26
-  drawText(page, fontRegular, `Zahlung spaetestens bis: ${formatDate(dueDate)} ohne Abzuege auf unten angegebene Bankverbindung.`, 30, y, 9)
+  drawText(page, fontRegular, `Zahlung spaetestens bis: ${formatDate(dueDate)} ohne Abzuege auf die unten angegebene Bankverbindung.`, 30, y, 9)
   y -= 12
   drawText(page, fontRegular, "Mit freundlichen Gruessen", 30, y, 9)
   y -= 12

@@ -3,7 +3,7 @@ import Credentials from "next-auth/providers/credentials"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import type { NextAuthConfig } from "next-auth"
-import type { JWT } from "@auth/core/jwt"
+import type { JWT } from "next-auth/jwt"
 import authSharedConfig from "@/auth.shared"
 
 declare module "next-auth" {

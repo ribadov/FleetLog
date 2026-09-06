@@ -1,85 +1,88 @@
-import { Resend } from "resend"
+import { google } from "googleapis";
+import MailComposer from "nodemailer/lib/mail-composer";
 
-type PasswordResetMailParams = {
-  to: string
-  resetUrl: string
-}
+const GMAIL_USER = process.env.GMAIL_USER;
+const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
 
-type InvoiceMailParams = {
-  to: string
-  invoiceNumber: string
-  invoiceUrl: string
-  subject?: string
-  bodyText?: string
-  pdfBuffer?: Buffer
-  pdfFileName?: string
-}
-
-function getResend() {
-  const apiKey = process.env.RESEND_API_KEY
-
-  if (!apiKey) {
-    throw new Error("RESEND_API_KEY is missing.")
-  }
-
-  return new Resend(apiKey)
-}
-
-function getFromAddress() {
-  const from = process.env.RESEND_FROM
-
-  if (!from) {
-    throw new Error("RESEND_FROM is missing.")
-  }
-
-  return from
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;")
-}
-
-export async function sendPasswordResetEmail({
-  to,
-  resetUrl,
-}: PasswordResetMailParams) {
-  const resend = getResend()
-  const from = getFromAddress()
-
-  const { data, error } = await resend.emails.send({
-    from,
-    to: [to],
-    subject: "FleetLog Passwort zurücksetzen",
-    text: `Du hast ein Zurücksetzen deines Passworts angefordert. Öffne diesen Link: ${resetUrl}\n\nDer Link ist 1 Stunde gültig.`,
-    html: `
-      <div style="font-family: Arial, sans-serif; line-height: 1.5;">
-        <h2>Passwort zurücksetzen</h2>
-        <p>Du hast ein Zurücksetzen deines FleetLog-Passworts angefordert.</p>
-        <p>
-          <a
-            href="${escapeHtml(resetUrl)}"
-            style="display:inline-block;background:#2563eb;color:white;padding:10px 16px;border-radius:8px;text-decoration:none;"
-          >
-            Passwort zurücksetzen
-          </a>
-        </p>
-        <p>Der Link ist 1 Stunde gültig.</p>
-      </div>
-    `,
-  })
-
-  if (error) {
+function getGmailClient() {
+  if (
+    !GMAIL_USER ||
+    !GMAIL_CLIENT_ID ||
+    !GMAIL_CLIENT_SECRET ||
+    !GMAIL_REFRESH_TOKEN
+  ) {
     throw new Error(
-      `Resend password reset email failed: ${error.message}`
-    )
+      "Missing Gmail configuration. Required: GMAIL_USER, GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN"
+    );
   }
 
-  return data
+  const oauth2Client = new google.auth.OAuth2(
+    GMAIL_CLIENT_ID,
+    GMAIL_CLIENT_SECRET
+  );
+
+  oauth2Client.setCredentials({
+    refresh_token: GMAIL_REFRESH_TOKEN,
+  });
+
+  return google.gmail({
+    version: "v1",
+    auth: oauth2Client,
+  });
+}
+
+async function sendGmailMessage({
+  to,
+  subject,
+  text,
+  html,
+  attachments,
+}: {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  }>;
+}) {
+  if (!GMAIL_USER) {
+    throw new Error("GMAIL_USER is not configured");
+  }
+
+  const mail = new MailComposer({
+    from: GMAIL_USER,
+    to,
+    subject,
+    text,
+    html,
+    attachments: attachments?.map((attachment) => ({
+      filename: attachment.filename,
+      content: attachment.content,
+      contentType: attachment.contentType || "application/octet-stream",
+    })),
+  });
+
+  const message = await mail.compile().build();
+
+  // Gmail API expects the complete RFC 2822 message
+  // encoded using base64url.
+  const raw = message.toString("base64url");
+
+  const gmail = getGmailClient();
+
+  const response = await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw,
+    },
+  });
+
+  return response.data;
 }
 
 export async function sendInvoiceEmail({
@@ -90,60 +93,156 @@ export async function sendInvoiceEmail({
   bodyText,
   pdfBuffer,
   pdfFileName,
-}: InvoiceMailParams) {
-  const resend = getResend()
-  const from = getFromAddress()
+}: {
+  to: string;
+  invoiceNumber: string;
+  invoiceUrl: string;
+  subject: string;
+  bodyText: string;
+  pdfBuffer?: Buffer;
+  pdfFileName?: string;
+}) {
+  const html = `
+<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif; line-height: 1.5;">
+    ${bodyText
+      .split("\n")
+      .map((line) => `<p>${escapeHtml(line)}</p>`)
+      .join("")}
 
-  const finalSubject =
-    subject?.trim() || `FleetLog Rechnung ${invoiceNumber}`
+    <p>
+      <a
+        href="${escapeHtml(invoiceUrl)}"
+        style="
+          display: inline-block;
+          padding: 10px 16px;
+          background: #111827;
+          color: white;
+          text-decoration: none;
+          border-radius: 6px;
+        "
+      >
+        Rechnung öffnen
+      </a>
+    </p>
 
-  const finalBody =
-    bodyText?.trim() ||
-    `Eine neue Rechnung (${invoiceNumber}) wurde für dich erstellt.`
+    <p>
+      Die Rechnung <strong>${escapeHtml(invoiceNumber)}</strong>
+      ist dieser E-Mail als PDF beigefügt.
+    </p>
+  </body>
+</html>
+`;
 
-  const htmlBody = finalBody
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => `<p>${escapeHtml(line)}</p>`)
-    .join("")
-
-  const { data, error } = await resend.emails.send({
-    from,
-    to: [to],
-    subject: finalSubject,
-    text: `${finalBody}\n\nÖffne sie hier: ${invoiceUrl}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; line-height: 1.5;">
-        <h2>${escapeHtml(finalSubject)}</h2>
-
-        ${htmlBody}
-
-        <p>
-          <a
-            href="${escapeHtml(invoiceUrl)}"
-            style="display:inline-block;background:#2563eb;color:white;padding:10px 16px;border-radius:8px;text-decoration:none;"
-          >
-            Rechnung öffnen
-          </a>
-        </p>
-
-        <p>Die Rechnung ist als PDF im Anhang enthalten.</p>
-      </div>
-    `,
-    attachments: pdfBuffer
+  const attachments =
+    pdfBuffer && pdfFileName
       ? [
           {
-            filename: pdfFileName || `Rechnung-${invoiceNumber}.pdf`,
+            filename: pdfFileName,
             content: pdfBuffer,
+            contentType: "application/pdf",
           },
         ]
-      : [],
-  })
+      : undefined;
 
-  if (error) {
-    throw new Error(`Resend invoice email failed: ${error.message}`)
+  try {
+    const result = await sendGmailMessage({
+      to,
+      subject,
+      text: bodyText,
+      html,
+      attachments,
+    });
+
+    console.log("[Gmail] Invoice email sent", {
+      invoiceNumber,
+      to,
+      messageId: result.id,
+      threadId: result.threadId,
+    });
+
+    return result;
+  } catch (error) {
+    console.error("[Gmail] Invoice email failed", {
+      invoiceNumber,
+      to,
+      error:
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+            }
+          : error,
+    });
+
+    throw error;
   }
+}
 
-  return data
+export async function sendPasswordResetEmail({
+  to,
+  resetUrl,
+}: {
+  to: string;
+  resetUrl: string;
+}) {
+  const subject = "FleetLog Passwort zurücksetzen";
+
+  const bodyText = `Hallo,
+
+bitte klicke auf den folgenden Link, um dein FleetLog-Passwort zurückzusetzen:
+
+${resetUrl}
+
+Falls du diese Anfrage nicht gestellt hast, kannst du diese E-Mail ignorieren.
+
+Viele Grüße
+KARR Logistik GmbH`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif; line-height: 1.5;">
+    <p>Hallo,</p>
+
+    <p>
+      bitte klicke auf den folgenden Link, um dein FleetLog-Passwort
+      zurückzusetzen:
+    </p>
+
+    <p>
+      <a href="${escapeHtml(resetUrl)}">
+        Passwort zurücksetzen
+      </a>
+    </p>
+
+    <p>
+      Falls du diese Anfrage nicht gestellt hast, kannst du diese E-Mail
+      ignorieren.
+    </p>
+
+    <p>
+      Viele Grüße<br />
+      KARR Logistik GmbH
+    </p>
+  </body>
+</html>
+`;
+
+  return sendGmailMessage({
+    to,
+    subject,
+    text: bodyText,
+    html,
+  });
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

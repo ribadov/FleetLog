@@ -74,8 +74,8 @@ export async function sendPasswordResetEmail({ to, resetUrl }: PasswordResetMail
             Passwort zurücksetzen
           </a>
         </p>
-        <p>Oder öffne diesen Link direkt:</p>
-        <p><a href="${resetUrl}">${resetUrl}</a></p>
+        // <p>Oder öffne diesen Link direkt:</p>
+        // <p><a href="${resetUrl}">${resetUrl}</a></p>
         <p>Der Link ist 1 Stunde gültig.</p>
       </div>
     `,
@@ -120,8 +120,8 @@ export async function sendInvoiceEmail({
             Rechnung öffnen
           </a>
         </p>
-        <p>Oder öffne diesen Link direkt:</p>
-        <p><a href="${invoiceUrl}">${invoiceUrl}</a></p>
+        // <p>Oder öffne diesen Link direkt:</p>
+        // <p><a href="${invoiceUrl}">${invoiceUrl}</a></p>
         <p>Die Rechnung ist als PDF im Anhang enthalten.</p>
       </div>
     `,
